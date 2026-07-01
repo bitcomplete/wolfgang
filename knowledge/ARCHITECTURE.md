@@ -93,96 +93,39 @@ harness → re-run until it passes → keep it as a regression. Reproduction is 
 ## Components
 
 ### Annals — the event log (spine)
-**What.** The immutable, append-only Kafka log of every event, keyed by `lineage_root` so
-an interaction branch is totally ordered within one partition. Tiered: hot local → S3.
-**Problem.** A durable, replayable source of truth with per-branch ordered history.
-**Design / why.** Kafka gives event sourcing, real-time transport, replay, and tiered
-storage natively — the log *is* the transport, so there is no separate messaging layer.
-Keying by `lineage_root` (not a random id, not agent id) is the load-bearing choice: it
-guarantees the per-branch causal order that fold correctness and resume depend on.
-Projections (`confirmed`, Rootlines) are compacted views derived from it, never the
-source of truth.
+- **Does** — immutable, append-only Kafka log of every event, keyed by `lineage_root` so all events for one interaction branch land in one partition, in order. Tiered: hot local → S3.
+- **Solves** — a durable, replayable source of truth with ordered per-branch history.
+- **Design** — the log is also the transport, so there's no separate messaging layer. Keying by `lineage_root` (not a random id or agent id) is what gives per-branch ordering, which replay and fold correctness depend on. `confirmed` and Rootlines are compacted views derived from the log, not separate stores of record.
 
 ### Event envelope — atomic claims
-**What.** Each record is a typed event: `thought`, `tool_call`, `tool_result`, `claim`,
-`trust_transition`, `handoff`, `control`, `snapshot`, `stream_delta`. A `claim` carries
-provenance edges (`derived_from` / `supports` / `contradicts`), an `evidence_ref`, and a
-`trust_state`.
-**Problem.** You cannot govern or prune at message granularity — one message asserts many
-propositions with different truth values.
-**Design / why.** The claim is the finest unit at which "is this true?" is well-defined,
-and it's the unit errors actually propagate through (as premises). Agents **self-declare**
-their claims and provenance — they alone know their implicit reliance. `tool_result` is
-*evidence*, not a claim. Protobuf + Schema Registry gives versioned, evolvable schemas.
+- **Does** — each record is a typed event: `thought`, `tool_call`, `tool_result`, `claim`, `trust_transition`, `handoff`, `control`, `snapshot`, `stream_delta`. A `claim` carries provenance edges (`derived_from` / `supports` / `contradicts`), an `evidence_ref`, and a `trust_state`.
+- **Solves** — a message asserts several things with different truth values, so you can't verify or prune at message granularity.
+- **Design** — the claim is the smallest unit with a well-defined truth value, and the unit errors travel through (as premises). Agents declare their own claims and provenance, since only the author knows what it relied on. A `tool_result` is evidence, not a claim. Protobuf + Schema Registry for versioned schemas.
 
 ### Rootlines — lineage DAG
-**What.** A projection over the log: nodes = claims, edges = provenance. Answers
-`descendants(claim)` (rollback blast radius) and computes centrality / risk.
-**Problem.** Trace any outcome to its root claims; find everything that relied on a claim
-that later proves false.
-**Design / why.** A derived, rebuildable-by-replay read model (P0 / transport-not-merge),
-held in a stream state store (RocksDB) and/or a graph DB for rich edge queries. It is the
-structure a flat log lacks — the reason Greenwood is more than an event stream.
+- **Does** — a projection over the log: nodes are claims, edges are provenance. Answers `descendants(claim)` (what relied on a claim) and scores centrality / risk.
+- **Solves** — tracing an outcome back to its root claims, and finding everything downstream of a claim that later proves false.
+- **Design** — a derived read model, rebuildable by replay; kept in a stream state store (RocksDB) and/or a graph DB for edge queries. It's the structure a flat event log doesn't have.
 
 ### Grieve — verifier / governance
-**What.** A separate process beside the bus. Consumes claims, screens them, and emits
-`trust_transition` events (`unverified` → `confirmed` / `rejected` / `quarantined`). The
-`confirmed` projection is the fold of those events.
-**Problem.** Agents can be wrong or prompt-injected; trust must be established
-independently. And error cascades must be *actively contained* — detection alone does not
-stop propagation.
-**Design / why.** Agent proposes, Grieve disposes: trust is never self-asserted (the
-audited party can't certify itself). It runs **async** — claims flow immediately; an agent
-may use its own unverified claims as working memory; only the `confirmed` projection
-counts as trusted context. Verification is **selective** (hub-role, at trust boundaries,
-high-risk). Rollback is a compensating event + re-fold, never a delete (immutability). A
-circuit breaker quarantines persistent offenders. Grieve's verdicts are themselves events,
-so Grieve is auditable.
+- **Does** — a separate process that reads claims, screens them, and emits `trust_transition` events (`unverified` → `confirmed` / `rejected` / `quarantined`). `confirmed` is the fold of those events.
+- **Solves** — agents can be wrong or prompt-injected, so trust must be set by something other than the agent; and a bad claim has to be actively stopped, since detecting it doesn't by itself stop it spreading.
+- **Design** — an agent can't certify its own claims, so a separate process assigns trust. It's async: claims flow immediately and an agent can use its own unverified claims as scratch, but only `confirmed` counts as shared context. Verification is selective (hub roles, handoff boundaries, high-risk claims). Rollback is a compensating event, not a delete. A circuit breaker quarantines claims that keep failing. Grieve's verdicts are events too, so they're auditable.
 
 ### Agent runtime — resume + cache continuity
-**What.** One stateless-recoverable process per agent. Loop: fold context → assemble
-prompt (with `cache_control` breakpoints) → call LLM (`claude-opus-4-8`) → stream + emit
-events → execute tools → emit claims.
-**Problem.** Agents run in k8s; pods get rescheduled (eviction, OOM, drain, crash);
-re-prefilling long context on a fresh host is slow and expensive.
-**Design / why.** Because state is a **deterministic fold** of the log, any host rebuilds
-the exact prompt byte-for-byte and hits the LLM's **content-addressed** prompt cache (1h
-TTL) — the cache is not tied to a session or machine, so a new pod hits the warm entry the
-dead one wrote. Periodic snapshots bound replay cost. In-flight calls are re-issued on
-resume (streamed deltas salvage partials). Content-hash `event_id`s make replay
-idempotent. Agent acquisition is Kafka consumer-group rebalance (small fleets) or a
-`control`-topic claim queue (scale).
+- **Does** — one recoverable process per agent. Loop: fold context → build prompt (with cache breakpoints) → call the model → stream and emit events → run tools → emit claims.
+- **Solves** — pods get rescheduled (eviction, OOM, drain, crash), and re-prefilling a long context on a new host is slow and expensive.
+- **Design** — state is a deterministic fold of the log, so any host rebuilds the exact same prompt bytes and hits the model's content-addressed prompt cache (1h TTL) — the cache isn't tied to a session or host, so a new pod hits the entry the dead one wrote. Snapshots bound replay cost; content-hash `event_id`s make replay idempotent; an interrupted call is re-issued on resume. A dead agent is picked up by consumer-group rebalance (small fleets) or a claim queue on the `control` topic (larger fleets).
 
 ### Handoff — genealogy-based
-**What.** An agent hands its successor a **verified slice of Rootlines** (seed claims +
-their confirmed ancestors), rendered as a Tier-0 synthesis, with lazy expansion to the
-underlying claims (Tier 1) and their evidence (Tier 2).
-**Problem.** Dumping a transcript re-imports the sender's errors and is untraceable at the
-claim level.
-**Design / why.** Only **confirmed** claims cross the boundary → error-gating at handoff
-(the cascade defense applied to the agent boundary). Provenance edges make the successor's
-work traceable to root. The Tier-0 synthesis is **entailment-checked against its source
-claims** before it crosses — it may assert only what the confirmed set entails, no
-hallucinated or distorted claims (lazy expansion complements this guard, it does not
-replace it: the successor reasons over the synthesis first). Boundary gate: entailment-verify
-the synthesis and on-demand verify any unexpanded slice claims, spawn on resolve; if a
-handed claim later flips `rejected`, emit a rewind on the successor's branch. Caching
-is not engineered for at handoff (a fresh successor has a cold cache), but the synthesis is
-still logged as an event — for provenance and the successor's own later resume.
+- **Does** — an agent hands its successor a verified slice of the lineage (seed claims + their confirmed ancestors) as a short Tier-0 synthesis, expandable on demand to the underlying claims (Tier 1) and their evidence (Tier 2).
+- **Solves** — passing a raw transcript re-imports the sender's mistakes and can't be traced at the claim level.
+- **Design** — only `confirmed` claims cross, so a sender's unverified or rejected claims can't leak into the successor. Provenance edges keep the successor's work traceable to root. The Tier-0 synthesis is entailment-checked against its source claims before it crosses (it can only assert what those claims entail); expansion complements that check rather than replacing it, since the successor reads the synthesis first. The slice is verified on demand before spawn; if a handed claim is later rejected, the successor's branch is rewound. Caching isn't a goal here (a fresh successor starts cold), but the synthesis is still logged — for provenance and the successor's own later resume.
 
 ### Coldframe — eval / refinement
-**What.** Human feedback (and Grieve's `rejected` verdicts) are events. An eval-builder
-freezes the flagged context (an event range) and derives an assertion; the runner replays
-it and asserts; failures drive harness tweaks until green; the passing case joins a
-regression suite.
-**Problem.** Turn real-world failures into durable tests, and refine the harness without
-regressing fixed cases.
-**Design / why.** Replay — built for resume — makes any past failure reproducible; a
-failure is *already* a replayable frozen context. Reproduction is **hermetic**: recorded
-`tool_result`s are replayed as fixtures, so only the model varies. Evals are **events**
-(versioned, auditable) and **statistical** (pass-rate ≥ threshold, since LLMs are
-stochastic). Rootlines lets one eval target a root cause and cover a cluster of related
-failures.
+- **Does** — human feedback and Grieve's rejections are events. An eval builder freezes the flagged context (an event range) and derives an assertion; a runner replays it and checks the assertion; failures drive harness changes until it passes; the passing case is kept as a regression.
+- **Solves** — turning real failures into durable tests, and improving the harness without regressing fixed cases.
+- **Design** — replay (built for resume) makes any past failure reproducible. Reproduction is hermetic: recorded tool results are replayed as fixtures, so only the model varies. Evals run N times and pass on a threshold, since model output isn't deterministic. Eval cases, harness versions, and runs are all events. Rootlines lets one eval target a root cause and cover a cluster of related failures.
 
 ## How they compose
 
