@@ -180,8 +180,8 @@
           <div class="field"><label for="rStd">S3 Standard ($/GB·mo)</label><input type="number" id="rStd" value="0.023" step="0.001"></div>
           <div class="field"><label for="rIa">S3-IA ($/GB·mo)</label><input type="number" id="rIa" value="0.0125" step="0.0001"></div>
           <div class="field"><label for="rGla">Glacier ($/GB·mo)</label><input type="number" id="rGla" value="0.0036" step="0.0001"></div>
-          <div class="field"><label for="rItS">Int-Tiering blended ($/GB·mo)</label><input type="number" id="rItS" value="0.004" step="0.0001"></div>
-          <div class="field"><label for="rItM">Int-Tiering monitor ($/1k obj·mo)</label><input type="number" id="rItM" value="0.0025" step="0.0001"></div>
+          <div class="field"><label for="rItS">IT Archive-Instant ($/GB·mo)</label><input type="number" id="rItS" value="0.004" step="0.0001"></div>
+          <div class="field"><label for="rItM">IT monitoring ($/1k obj·mo)</label><input type="number" id="rItM" value="0.0025" step="0.0001"></div>
           <div class="field"><label for="rPut">PUT ($/1k)</label><input type="number" id="rPut" value="0.005" step="0.001"></div>
           <div class="field"><label for="rGet">GET ($/1k)</label><input type="number" id="rGet" value="0.0004" step="0.0001"></div>
           <div class="field"><label for="rTr">Lifecycle transition ($/1k)</label><input type="number" id="rTr" value="0.01" step="0.001"></div>
@@ -329,9 +329,16 @@
       rows.push({name:"Glacier"+(ramp<1?" (½ ramp)":""), vol:glaB, yr:GB(glaB)*rGla*12});
       rows.push({name:"Requests — PUT + transitions", vol:null, yr:(putMo+transMo)*12});
     }else{
-      var s3B=stdB+iaB+glaB;
-      rows.push({name:"S3 Intelligent-Tiering — storage", vol:s3B, yr:GB(s3B)*rItS*12});
-      rows.push({name:"Int-Tiering — monitoring", vol:null, yr:objTotal/1000*rItM*12});
+      // Intelligent-Tiering auto-tiers on AWS's FIXED schedule (not the DIY windows):
+      // Frequent (=Standard price) → Infrequent after 30d → Archive Instant after 90d.
+      // No transition fees, but a per-object monitoring fee — and Archive Instant ($0.004)
+      // can't reach Glacier's $0.0036/Deep Archive $0.00099, so it's a premium you pay for
+      // instant access + no retrieval fees + no min-duration risk.
+      var itF=win(hotH*HR,30*DAY), itI=win(30*DAY,90*DAY), itA=win(90*DAY,retSec)*ramp;
+      rows.push({name:"IT — Frequent (≤30d)", vol:itF, yr:GB(itF)*rStd*12});
+      rows.push({name:"IT — Infrequent (30–90d)", vol:itI, yr:GB(itI)*rIa*12});
+      rows.push({name:"IT — Archive Instant (90d+)"+(ramp<1?" (½ ramp)":""), vol:itA, yr:GB(itA)*rItS*12});
+      rows.push({name:"IT — monitoring", vol:null, yr:objTotal/1000*rItM*12});
       rows.push({name:"Requests — PUT", vol:null, yr:putMo*12});
     }
     rows.push({name:"Requests — GET (reads/replay)", vol:null, yr:getYr});
