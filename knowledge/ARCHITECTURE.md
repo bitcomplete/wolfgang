@@ -29,40 +29,66 @@ Greenwood is an attempt to build a system around that paper's insight.
 - **The claim is the atom.** The unit of trust, provenance, and rollback is an *atomic
   claim* (a minimal, independently-verifiable proposition), not a whole message.
 
-## Diagram
+## Diagrams
+
+Across all three: **solid arrows are event writes into the log; dotted arrows are
+derivations/reads** (projections, replay, spawns). Annals is the shared spine.
+
+### Core loop — run, persist, resume, hand off
 
 ```mermaid
 flowchart TB
-  LLM@{ shape: cloud, label: "Model provider — remote network call (claude-opus-4-8)" }
-
+  LLM@{ shape: cloud, label: "Model provider (claude-opus-4-8)" }
   subgraph RT["Agent runtime (stateless-recoverable)"]
     AGENT["Agent process"]
   end
-
   AGENT <-->|"content-addressed prompt cache"| LLM
 
   ANNALS[["Annals — immutable event log (Kafka)<br/>keyed by lineage_root · tiered hot to S3"]]
-
   AGENT -->|"thoughts, tool calls/results,<br/>claims, handoffs"| ANNALS
   ANNALS -.->|"replay + fold → exact context"| AGENT
-
   ANNALS -.->|"claims + edges"| ROOT["Rootlines<br/>lineage DAG projection"]
-  ANNALS -.->|"unverified claims"| GRIEVE["Grieve<br/>verifier / governance"]
-  GRIEVE -->|"trust transitions"| ANNALS
-  GRIEVE -.->|"latest trust / claim"| CONF[["confirmed<br/>projection"]]
 
+  ANNALS -.->|"latest trust / claim"| CONF[["confirmed<br/>projection"]]
   ROOT -.->|"ancestry"| HANDOFF{{"Handoff<br/>verified subgraph slice"}}
   CONF -.->|"confirmed filter"| HANDOFF
   HANDOFF -.->|"spawn w/ Tier-0 synthesis"| AGENT
-
-  FB["feedback events<br/>(human + Grieve rejections)"] -->|"first-class events"| ANNALS
-  ANNALS -.->|"feedback + frozen context"| COLD["Coldframe<br/>eval / refinement"]
-  COLD -.->|"hermetic replay"| RT
 ```
 
-*Solid arrows are event writes into the log; dotted arrows are derivations/reads from it
-(projections, replay, spawns). The model provider sits outside the runtime — every call
-is a network round-trip to a remote model.*
+An agent calls the model, logs every action to Annals, and resumes on any host by
+deterministic replay. Handoff gives a successor a verified slice of the sender's lineage
+(the `confirmed` projection it filters against is filled by Grieve, below).
+
+### Grieve — trust & governance
+
+```mermaid
+flowchart TB
+  AGENT["Agent process"] -->|"self-declared claims<br/>(land unverified)"| ANNALS[["Annals — immutable event log"]]
+  ANNALS -.->|"unverified claims<br/>(hubs · boundaries · high-risk)"| GRIEVE["Grieve<br/>verifier / governance"]
+  GRIEVE -->|"confirmed / rejected / quarantined"| ANNALS
+  ANNALS -.->|"fold: latest trust / claim"| CONF[["confirmed<br/>projection"]]
+  CONF -.->|"only confirmed crosses"| HANDOFF{{"handoff boundary"}}
+```
+
+Grieve runs beside the bus, async: agents propose claims, Grieve disposes trust as
+separate events, and `confirmed` is their fold. Rollback is a later `rejected` — a
+compensating event, never a delete.
+
+### Coldframe — evals & refinement
+
+```mermaid
+flowchart TB
+  FB["human feedback +<br/>Grieve rejections"] -->|"first-class events"| ANNALS[["Annals — immutable event log"]]
+  ANNALS -.->|"feedback + frozen context<br/>(event range)"| COLD["Coldframe<br/>eval builder + runner"]
+  COLD -.->|"recorded tool-results as fixtures"| RT["Agent runtime"]
+  RT -.->|"outcome vs. assertion"| COLD
+  COLD -->|"eval cases · harness versions · runs"| ANNALS
+  COLD -.->|"pass → keep as regression"| SUITE[("regression suite")]
+```
+
+A flagged failure becomes a replayable eval: reproduce (must fail first) → tweak the
+harness → re-run until it passes → keep it as a regression. Reproduction is hermetic
+(only the model varies); eval cases, harness versions, and runs are themselves events.
 
 ## Components
 
