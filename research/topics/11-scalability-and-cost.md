@@ -52,6 +52,15 @@ cold tier and/or full rewrite); Pulsar (compaction-on-tiered-data is a known bug
 **Scope:** state capture + replay only (ignore agent-runtime inference). Driving parameter
 is **captured bytes per agent-second** (events + referenced-payload bytes).
 
+**Token-native basis (interactive calculator, `research/cost-model/`):** since agent
+utilization is usually reasoned about in *tokens*, the calculator takes *output tokens /
+agent·hour* and converts at ~4 B/token × ~1.5 envelope overhead. It also prices **S3 GET
+requests** (replay reads), which — like PUTs — scale with **segment size, not event
+count**: batched MB-scale segments keep request cost negligible; one-object-per-event
+would make requests explode. At realistic net-new token rates the capture volume comes out
+at or below the byte estimates below — reinforcing that storage is trivial and eval
+inference dominates.
+
 | | captured B/agent/s | throughput (500 agents) | annual volume V |
 |---|---|---|---|
 | Low | ~1 KB/s | 0.5 MB/s | ~16 TB |

@@ -147,6 +147,20 @@ replaying the log:
 Because they share that one move, they share one implementation. Rootlines carries all of
 it: the resume substrate, the handoff payload, the audit graph, and the index evals target.
 
+## Cost
+
+Two buckets, very different in character: **state capture / replay** (storage + transport
+— cheap; low tens of $k/yr for 500 agents on an object-store-native engine) and **eval
+inference** (re-running flows through the model — dominant at any real regression cadence).
+Full model and the 500-agent-year worked estimate:
+[`research/topics/11-scalability-and-cost.md`](../research/topics/11-scalability-and-cost.md).
+
+Explore configurations — token-native workload → tiered S3 (hot / Standard / IA / Glacier
+or Intelligent-Tiering) + PUT/GET requests + eval inference, across AutoMQ / Kafka / raw-S3:
+
+- **Interactive calculator (live):** <https://pin.bitcomplete.dev/public/p/01KWF2G8HN33TPKM9PNVF9HJJ4?token=ZR9FH3B-0lU0wYdDDQPlvvPI9E8HCB2XPV7GSJshQGc> *(public link, ~30-day expiry)*
+- **Source (permanent):** [`research/cost-model/calculator.html`](../research/cost-model/calculator.html)
+
 ## Decisions
 
 Rationale, alternatives, and trade-offs for every choice above are in
