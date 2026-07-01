@@ -1,0 +1,15 @@
+{
+  "version": "0.1.0",
+  "name": "wolfgang",
+  "description": "Wolfgang is a project planning and ideation navigator for the software garden, helping track decisions, brainstorm features, and organize thoughts across projects like Chattermax, Chalet, and Chizu.",
+  "communicationLayerVersion": "^0.1.0",
+  "sdkAdapterVersion": "^1.0.0",
+  "knowledgeBasePath": "./knowledge",
+  "instructionsPath": "CLAUDE.md",
+  "createdAt": "2026-06-30T06:12:47.353Z",
+  "plugins": {
+    "configFile": "./.claude/plugins.json"
+  },
+  "updatedAt": "2026-06-30T06:12:47.353Z",
+  "knowledgePack": null
+}
