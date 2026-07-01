@@ -56,8 +56,8 @@ is **captured bytes per agent-second** (events + referenced-payload bytes).
 utilization is usually reasoned about in *tokens*, the calculator takes *total net-new
 captured tokens / agent·hour* — model output **plus tool calls, tool results, and claims**
 (each logged once; context re-sends excluded), which for a busy agent is dominated by tool
-results, not the model's own output (default ~300k/hr ≈ 83 tok/s; tool-heavy agents hit
-1M+). It converts at ~4 B/token × ~1.5 envelope overhead. It also prices **S3 GET
+results, not the model's own output (default ~600k/hr ≈ 167 tok/s ≈ 1 KB/s — the "Low"
+bracket below; tool-heavy agents hit 1M+). It converts at ~4 B/token × ~1.5 envelope overhead. It also prices **S3 GET
 requests** (replay reads), which — like PUTs — scale with **segment size, not event
 count**: batched MB-scale segments keep request cost negligible; one-object-per-event
 would make requests explode. At realistic net-new token rates the capture volume comes out

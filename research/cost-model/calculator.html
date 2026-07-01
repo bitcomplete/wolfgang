@@ -127,8 +127,8 @@
         <div class="field"><label for="agents">Agents (continuous)</label>
           <input type="number" id="agents" value="500000" min="1" step="1000"></div>
         <div class="field"><label for="tph">Captured tokens / agent·hour</label>
-          <input type="number" id="tph" value="300000" min="0" step="10000">
-          <span class="hint">total net-new logged tokens — output + tool calls + tool results + claims (each once; not context re-sends). ~300k ≈ 83 tok/s; tool-heavy agents hit 1M+</span></div>
+          <input type="number" id="tph" value="600000" min="0" step="10000">
+          <span class="hint">total net-new logged tokens — output + tool calls + tool results + claims (each once; not context re-sends). ~600k ≈ 167 tok/s; tool-heavy agents hit 1M+</span></div>
         <div class="field"><label for="bpt">Bytes / token</label>
           <input type="number" id="bpt" value="4" min="0.1" step="0.5">
           <span class="hint">~4 B/token for UTF-8 text</span></div>
