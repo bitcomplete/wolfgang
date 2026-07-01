@@ -19,8 +19,9 @@ a fold of the log. That one property does a lot of work:
 - **Coldframe (evals)** — human feedback becomes replayable eval cases; failures are
   reproduced, the harness is refined, and the case joins a regression suite.
 
-Start with [`research/decisions.md`](./research/decisions.md) and
-[`research/NAMES.md`](./research/NAMES.md), then
+Start with [`knowledge/ARCHITECTURE.md`](./knowledge/ARCHITECTURE.md) for the high-level
+design, then [`research/decisions.md`](./research/decisions.md),
+[`research/NAMES.md`](./research/NAMES.md), and
 [`research/WORK-BREAKDOWN.md`](./research/WORK-BREAKDOWN.md).
 
 ## Repository layout
