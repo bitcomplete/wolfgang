@@ -11,7 +11,10 @@ tests — all from one substrate.
 Multi-agent systems fail by **error cascade**: one agent's mistake becomes another's
 premise and hardens into false consensus. A flat event stream records *what happened* but
 not *what derived from what* — so a bad branch can't be traced or pruned. Greenwood makes
-the **genealogy** of agentic interactions a first-class structure.
+the **genealogy** of agentic interactions a first-class structure. The framing — error
+cascade, false consensus, and a lineage graph to contain it — leans heavily on
+*[From Spark to Fire](https://arxiv.org/abs/2603.04474)* (Xie et al., 2026); much of
+Greenwood is an attempt to build a system around that paper's insight.
 
 ## Principles
 
