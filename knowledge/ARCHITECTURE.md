@@ -30,30 +30,36 @@ the **genealogy** of agentic interactions a first-class structure.
 
 ```mermaid
 flowchart TB
+  LLM@{ shape: cloud, label: "Model provider — remote network call (claude-opus-4-8)" }
+
   subgraph RT["Agent runtime (stateless-recoverable)"]
     AGENT["Agent process"]
-    LLM["LLM — claude-opus-4-8<br/>(content-addressed prompt cache)"]
-    AGENT <-->|"prompt / completion"| LLM
   end
+
+  AGENT <-->|"prompt / completion"| LLM
 
   ANNALS[["Annals — immutable event log (Kafka)<br/>keyed by lineage_root · tiered hot to S3"]]
 
-  AGENT -->|"events: thought, tool_call,<br/>tool_result, claim, handoff"| ANNALS
-  ANNALS -->|"replay + fold to exact context"| AGENT
+  AGENT -->|"emit events: thought, tool_call,<br/>tool_result, claim, handoff"| ANNALS
+  ANNALS -.->|"replay + fold to exact context"| AGENT
 
-  ANNALS --> ROOT["Rootlines<br/>lineage DAG projection"]
-  ANNALS --> GRIEVE["Grieve<br/>verifier / governance"]
+  ANNALS -.-> ROOT["Rootlines<br/>lineage DAG projection"]
+  ANNALS -.-> GRIEVE["Grieve<br/>verifier / governance"]
   GRIEVE -->|"trust-transition events"| ANNALS
-  GRIEVE --> CONF[["confirmed<br/>projection"]]
+  GRIEVE -.-> CONF[["confirmed<br/>projection"]]
 
-  ROOT --> HANDOFF{{"Handoff<br/>verified subgraph slice"}}
-  CONF --> HANDOFF
-  HANDOFF -->|"spawn successor with Tier-0 synthesis"| AGENT
+  ROOT -.-> HANDOFF{{"Handoff<br/>verified subgraph slice"}}
+  CONF -.-> HANDOFF
+  HANDOFF -.->|"spawn successor with Tier-0 synthesis"| AGENT
 
   FB["feedback events<br/>(human + Grieve rejections)"] --> ANNALS
-  ANNALS --> COLD["Coldframe<br/>eval / refinement"]
-  COLD -->|"replay frozen context (hermetic)"| RT
+  ANNALS -.-> COLD["Coldframe<br/>eval / refinement"]
+  COLD -.->|"replay frozen context (hermetic)"| RT
 ```
+
+*Solid arrows are event writes into the log; dotted arrows are derivations/reads from it
+(projections, replay, spawns). The model provider sits outside the runtime — every call
+is a network round-trip to a remote model.*
 
 ## Components
 
