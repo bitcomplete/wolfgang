@@ -94,8 +94,11 @@
   tr.grand td.num{color:#fff}
   .muted-row td{color:var(--muted)}
 
-  footer.note{margin-top:20px;font-size:12px;color:var(--muted);max-width:78ch}
-  footer.note code{font-family:var(--mono);background:var(--line-2);padding:1px 5px;border-radius:4px;font-size:11.5px}
+  footer.note{margin:34px auto 0;max-width:680px;font-size:12.5px;line-height:1.7;color:var(--muted);
+    text-align:center;text-wrap:pretty;border-top:1px solid var(--line);padding-top:20px}
+  footer.note b{color:var(--ink);font-weight:600}
+  footer.note code{font-family:var(--mono);background:var(--line-2);padding:1px 5px;border-radius:4px;
+    font-size:11.5px;white-space:nowrap}
   .split{display:flex;height:10px;border-radius:6px;overflow:hidden;margin:14px 2px 0;border:1px solid var(--line)}
   .split i{display:block;height:100%}
   .split .s-cap{background:var(--ever)} .split .s-evl{background:var(--clay)}
@@ -122,7 +125,7 @@
       <section class="panel">
         <p class="eyebrow">Workload</p>
         <div class="field"><label for="agents">Agents (continuous)</label>
-          <input type="number" id="agents" value="500" min="1" step="1"></div>
+          <input type="number" id="agents" value="500000" min="1" step="1000"></div>
         <div class="field"><label for="tph">Output tokens / agent·hour</label>
           <input type="number" id="tph" value="100000" min="0" step="10000">
           <span class="hint">net new captured tokens (thoughts, tool calls + results, claims) — not context re-sends</span></div>
@@ -167,10 +170,12 @@
           <label><input type="radio" name="engine" value="vanilla"><span>Vanilla Kafka</span></label>
           <label><input type="radio" name="engine" value="raws3"><span>Raw&nbsp;S3</span></label>
         </div>
-        <div class="field"><label for="compute">Compute floor ($/mo)</label>
-          <input type="number" id="compute" value="1200" min="0" step="100">
+        <div class="field"><label for="nodeMo">Cost / node·mo ($)</label>
+          <input type="number" id="nodeMo" value="400" min="0" step="50">
           <span class="hint" id="engHint"></span></div>
         <details class="adv"><summary>Advanced rates — infra</summary>
+          <div class="field"><label for="nodeCap">Per-node capacity (MB/s)</label><input type="number" id="nodeCap" value="125" min="1" step="5"></div>
+          <div class="field"><label for="minNodes">Min nodes (HA floor)</label><input type="number" id="minNodes" value="3" min="1" step="1"></div>
           <div class="field"><label for="rEbs">EBS gp3 ($/GB·mo)</label><input type="number" id="rEbs" value="0.08" step="0.001"></div>
           <div class="field"><label for="rStd">S3 Standard ($/GB·mo)</label><input type="number" id="rStd" value="0.023" step="0.001"></div>
           <div class="field"><label for="rIa">S3-IA ($/GB·mo)</label><input type="number" id="rIa" value="0.0125" step="0.0001"></div>
@@ -229,6 +234,7 @@
         <div>throughput <b id="oThru">–</b></div>
         <div>stored at retention <b id="oVol">–</b></div>
         <div>objects <b id="oObj">–</b></div>
+        <div>compute <b id="oNodes">–</b></div>
         <div>eval runs / yr <b id="oRuns">–</b></div>
       </div>
 
@@ -239,9 +245,10 @@
         </table>
       </div>
 
-      <footer class="note" id="note"></footer>
     </div>
   </div>
+
+  <footer class="note" id="note"></footer>
 </div>
 
 <script>
@@ -250,15 +257,19 @@
   var $=function(id){return document.getElementById(id);};
   function num(id){var v=parseFloat($(id).value);return isFinite(v)?v:0;}
   function radio(name){var e=document.querySelector('input[name="'+name+'"]:checked');return e?e.value:null;}
-  var ENG={automq:{rf:1,az:false,c:1200,note:"S3-native · single-copy hot · no cross-AZ"},
-           vanilla:{rf:3,az:true,c:1500,note:"3× replicated hot · inter-AZ replication"},
-           raws3:{rf:1,az:false,c:600,note:"S3 log · minimal compute · you own ordering"}};
+  var ENG={automq:{rf:1,az:false,nodeMo:400,note:"S3-native · single-copy hot · no cross-AZ"},
+           vanilla:{rf:3,az:true,nodeMo:500,note:"3× replicated hot · inter-AZ replication"},
+           raws3:{rf:1,az:false,nodeMo:200,note:"S3 log · minimal compute · you own ordering"}};
 
-  function money(x){ if(!isFinite(x))return"–"; if(x>=1e6)return"$"+(x/1e6).toFixed(2)+"M";
+  function money(x){ if(!isFinite(x))return"–";
+    if(x>=1e9)return"$"+(x/1e9).toFixed(2)+"B"; if(x>=1e6)return"$"+(x/1e6).toFixed(2)+"M";
+    if(x>0&&x<1)return"$"+x.toFixed(2);
     return "$"+Math.round(x).toLocaleString("en-US"); }
-  function bytes(b){ if(b>=1e12)return (b/1e12).toFixed(1)+" TB"; if(b>=1e9)return (b/1e9).toFixed(1)+" GB";
+  function bytes(b){ if(b>=1e15)return (b/1e15).toFixed(2)+" PB"; if(b>=1e12)return (b/1e12).toFixed(1)+" TB";
+    if(b>=1e9)return (b/1e9).toFixed(1)+" GB";
     if(b>=1e6)return (b/1e6).toFixed(1)+" MB"; return Math.round(b/1e3)+" KB"; }
-  function count(x){ if(x>=1e9)return (x/1e9).toFixed(1)+"B"; if(x>=1e6)return (x/1e6).toFixed(1)+"M";
+  function count(x){ if(x>=1e12)return (x/1e12).toFixed(1)+"T"; if(x>=1e9)return (x/1e9).toFixed(1)+"B";
+    if(x>=1e6)return (x/1e6).toFixed(1)+"M";
     if(x>=1e3)return (x/1e3).toFixed(1)+"k"; return Math.round(x).toString(); }
   var GB=function(b){return b/1e9;};
 
@@ -267,9 +278,8 @@
   function calc(){
     // engine preset: set compute default only when engine changes
     var eng=radio("engine");
-    if(eng!==lastEngine){ $("compute").value=ENG[eng].c; lastEngine=eng; }
+    if(eng!==lastEngine){ $("nodeMo").value=ENG[eng].nodeMo; lastEngine=eng; }
     var rf=ENG[eng].rf, az=ENG[eng].az;
-    $("engHint").textContent=ENG[eng].note;
 
     var A=num("agents"), tph=num("tph"), bpt=num("bpt"), ovh=num("ovh"), retD=num("ret");
     var hotH=num("hotH"), stdD=num("stdD"), iaD=num("iaD"), segMB=num("seg");
@@ -292,7 +302,14 @@
     var putMo     = objPerSec*MO/1000*rPut;
     var ingestGBmo= T*MO/1e9;
     var netMo     = az ? ingestGBmo*(rf-1)*2*rAz : 0;
-    var computeMo = num("compute");
+    // compute — bottom-up node count, not a flat floor. At low throughput this
+    // pins to the HA minimum (min nodes × $/node) = the old floor; past a node's
+    // sustained capacity it grows linearly (× rf, since replicas load brokers too).
+    var nodeCap=num("nodeCap"), minNodes=num("minNodes"), nodeMo=num("nodeMo");
+    var TmbS=T/1e6;
+    var nodes=Math.max(minNodes, Math.ceil(TmbS*rf/Math.max(nodeCap,1e-9)));
+    var computeMo = nodes*nodeMo;
+    $("engHint").textContent=ENG[eng].note+" · "+nodes+(nodes===1?" node → ":" nodes → ")+money(computeMo)+"/mo";
     var hotMo     = GB(hotB)*rf*rEbs;
 
     // reads / replay — S3 GET (governed by segment size, not event count)
@@ -319,7 +336,7 @@
     }
     rows.push({name:"Requests — GET (reads/replay)", vol:null, yr:getYr});
     if(az) rows.push({name:"Inter-AZ replication", vol:null, yr:netMo*12});
-    rows.push({name:"Compute floor", vol:null, yr:computeMo*12});
+    rows.push({name:"Compute — "+nodes+(nodes===1?" node":" nodes"), vol:null, yr:computeMo*12});
 
     var capYr=rows.reduce(function(s,r){return s+r.yr;},0);
 
@@ -345,6 +362,7 @@
     $("oThru").textContent=(T/1e6).toFixed(3)+" MB/s";
     $("oVol").textContent=bytes(hotB+stdB+iaB+ (ramp<1?glaB/ramp:glaB));
     $("oObj").textContent=count(objPerSec)+"/s · "+count(objTotal)+" kept";
+    $("oNodes").textContent=nodes+(nodes===1?" node · ":" nodes · ")+money(computeMo)+"/mo";
     $("oRuns").textContent=count(runsYr)+" ("+money(runCost)+"/run)";
 
     // table
@@ -366,7 +384,7 @@
 
     // note
     var dom = evalYr>capYr ? "Eval inference dominates" : "Storage dominates";
-    $("note").innerHTML= dom+" ("+money(Math.max(capYr,evalYr))+" vs "+money(Math.min(capYr,evalYr))+"). "
+    $("note").innerHTML= "<b>"+dom+"</b> ("+money(Math.max(capYr,evalYr))+" vs "+money(Math.min(capYr,evalYr))+"). "
       +"Steady-state annual run-rate — year-1 is lower while the archive fills (toggle <code>Amortize year-1 ramp</code>). "
       +"S3 requests are priced (PUT on ingest, GET on every replay) but both scale with <code>segment size</code>, not event count — "
       +"batching events into MB-scale segments keeps them tiny; set the segment near 1&nbsp;KB (object-per-event) to watch them explode. "

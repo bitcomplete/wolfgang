@@ -155,10 +155,12 @@ inference** (re-running flows through the model — dominant at any real regress
 Full model and the 500-agent-year worked estimate:
 [`research/topics/11-scalability-and-cost.md`](../research/topics/11-scalability-and-cost.md).
 
-Explore configurations — token-native workload → tiered S3 (hot / Standard / IA / Glacier
-or Intelligent-Tiering) + PUT/GET requests + eval inference, across AutoMQ / Kafka / raw-S3:
+Explore configurations at any fleet scale — token-native workload → tiered S3 (hot /
+Standard / IA / Glacier or Intelligent-Tiering) + PUT/GET requests + eval inference, across
+AutoMQ / Kafka / raw-S3. Compute is sized bottom-up (nodes = throughput ÷ per-node capacity,
+floored at an HA minimum), so it holds flat at small scale and grows with load:
 
-- **Interactive calculator (live):** <https://pin.bitcomplete.dev/public/p/01KWF2G8HN33TPKM9PNVF9HJJ4?token=ZR9FH3B-0lU0wYdDDQPlvvPI9E8HCB2XPV7GSJshQGc> *(public link, ~30-day expiry)*
+- **Interactive calculator (live):** <https://pin.bitcomplete.dev/public/p/01KWF6JKQFDD8E988VH66RQ0AV?token=ZWn4zA60vw9ad50lSsoxAASLRVd-jhZEeVm0ZUVBejU> *(public link, expires 2026-07-31)*
 - **Source (permanent):** [`research/cost-model/calculator.html`](../research/cost-model/calculator.html)
 
 ## Decisions

@@ -59,7 +59,10 @@ requests** (replay reads), which — like PUTs — scale with **segment size, no
 count**: batched MB-scale segments keep request cost negligible; one-object-per-event
 would make requests explode. At realistic net-new token rates the capture volume comes out
 at or below the byte estimates below — reinforcing that storage is trivial and eval
-inference dominates.
+inference dominates. Compute is sized **bottom-up** — `nodes = ceil(throughput · RF ÷
+per-node capacity)`, floored at an HA minimum — so it stays a flat floor at the 500-agent
+scale but grows linearly once the fleet is large enough to exceed a node's capacity (the
+calculator scales to arbitrary fleet size; it defaults to a 500k-agent fleet).
 
 | | captured B/agent/s | throughput (500 agents) | annual volume V |
 |---|---|---|---|
@@ -89,7 +92,7 @@ throughput. Low case ≈ $15–30k; high case (316 TB) ≈ $60–120k. Cold-tier
 (IA/Glacier) roughly halves-to-quarters the storage line.
 
 **Formula:** `V = 500 · B · 3.156e7` (bytes/yr); `storage$/yr ≈ V_GB · rate$/GB-mo · 12`
-(× ½ in year 1); `compute$/yr ≈ cluster floor`; `network ≈ 0` on S3-native. Vanilla-Kafka
+(× ½ in year 1); `compute$/yr ≈ max(HA-floor, nodes·$/node)`; `network ≈ 0` on S3-native. Vanilla-Kafka
 adds `inter-AZ = V_GB · $0.02` and `hot = hotwindow · V · RF · $0.08/GB-mo`.
 
 ## Cost model — evals (Coldframe): LLM-inference-dominated
