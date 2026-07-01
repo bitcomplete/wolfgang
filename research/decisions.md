@@ -32,6 +32,41 @@ rollback (compensating events + re-fold) all the *same* mechanism.
 
 ---
 
+## D6 — Backing store: keep the Kafka API, run it object-store-native  (proposed 2026-07-01)
+
+**Decision (proposed):** Target the **Kafka API/abstraction** (append log, keyed ordering,
+replay, compaction, tiered retention) — but do **not** run on vanilla open-source Kafka.
+Greenwood's workload is write-heavy with rare/cold reads, and vanilla Kafka's bill is
+dominated by exactly the wrong things for that shape: hot storage × 3× replication, and
+inter-AZ replication traffic (~$0.02/GB ingested, often >50% of a Kafka bill). Read/egress
+— Kafka's expensive axis — is ~$0 here.
+
+Run it on an **object-store-native, Kafka-compatible engine**: **AutoMQ** (full compaction
+via Kafka's real LogCleaner, ~20ms P99 with an EBS WAL, drop-in) or **WarpStream** (managed,
+drop-in — but mind compaction ceilings: 3M distinct keys / 128 GiB per job, immutable
+`cleanup.policy`). Both drop triple-replicated NVMe for S3 and remove cross-AZ replication →
+storage/network ~5–10× cheaper, **design + Graft adapters unchanged**. **Raw S3-as-log** is
+cheapest at scale but a full rewrite — fallback only. Rejected: Kinesis / Pub/Sub / NATS
+JetStream (no compaction, and/or no cheap cold tier, and/or full rewrite); Pulsar
+(compaction-on-tiered-data is a known bug).
+
+**Also adopt (engine-independent):** payloads-by-reference (large tool outputs → S3 blob +
+hash in the event; ~3,000× ingest-vs-store gap), snapshot-to-bound-hot-retention, and
+cold-tier to S3-IA/Glacier for the multi-year archive.
+
+**Cost shape (from the 500-agent-year model, topic 11):** at 500 agents Greenwood is a
+*small* throughput workload (sub-10 MB/s) — storage- and compute-floor-bound, not
+throughput-bound. State capture ≈ **low tens of $k/yr**. The **eval (Coldframe) bucket is
+LLM-inference-dominated and dwarfs storage** at any real regression cadence.
+
+**Open:** verify compaction on the chosen engine against real `lineage_root` cardinality;
+measure produce latency on the S3 path.
+
+**Related:** [[topics/11-scalability-and-cost]], [[topics/05-kafka-architecture-sketch]],
+[[topics/10-graft-harness-adapters]].
+
+---
+
 ## D5 — Harness adapters: the Graft protocol (harness-agnostic)  (proposed 2026-07-01)
 
 **Decision (proposed):** Greenwood is **harness-agnostic**. Its only external contract is
