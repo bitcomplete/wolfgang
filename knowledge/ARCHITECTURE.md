@@ -126,8 +126,12 @@ underlying claims (Tier 1) and their evidence (Tier 2).
 claim level.
 **Design / why.** Only **confirmed** claims cross the boundary → error-gating at handoff
 (the cascade defense applied to the agent boundary). Provenance edges make the successor's
-work traceable to root. Boundary gate: on-demand verify the slice, spawn on resolve;
-if a handed claim later flips `rejected`, emit a rewind on the successor's branch. Caching
+work traceable to root. The Tier-0 synthesis is **entailment-checked against its source
+claims** before it crosses — it may assert only what the confirmed set entails, no
+hallucinated or distorted claims (lazy expansion complements this guard, it does not
+replace it: the successor reasons over the synthesis first). Boundary gate: entailment-verify
+the synthesis and on-demand verify any unexpanded slice claims, spawn on resolve; if a
+handed claim later flips `rejected`, emit a rewind on the successor's branch. Caching
 is not engineered for at handoff (a fresh successor has a cold cache), but the synthesis is
 still logged as an event — for provenance and the successor's own later resume.
 
