@@ -39,25 +39,25 @@ flowchart TB
     AGENT["Agent process"]
   end
 
-  AGENT <-->|"prompt / completion"| LLM
+  AGENT <-->|"content-addressed prompt cache"| LLM
 
   ANNALS[["Annals — immutable event log (Kafka)<br/>keyed by lineage_root · tiered hot to S3"]]
 
-  AGENT -->|"emit events: thought, tool_call,<br/>tool_result, claim, handoff"| ANNALS
-  ANNALS -.->|"replay + fold to exact context"| AGENT
+  AGENT -->|"thoughts, tool calls/results,<br/>claims, handoffs"| ANNALS
+  ANNALS -.->|"replay + fold → exact context"| AGENT
 
-  ANNALS -.-> ROOT["Rootlines<br/>lineage DAG projection"]
-  ANNALS -.-> GRIEVE["Grieve<br/>verifier / governance"]
-  GRIEVE -->|"trust-transition events"| ANNALS
-  GRIEVE -.-> CONF[["confirmed<br/>projection"]]
+  ANNALS -.->|"claims + edges"| ROOT["Rootlines<br/>lineage DAG projection"]
+  ANNALS -.->|"unverified claims"| GRIEVE["Grieve<br/>verifier / governance"]
+  GRIEVE -->|"trust transitions"| ANNALS
+  GRIEVE -.->|"latest trust / claim"| CONF[["confirmed<br/>projection"]]
 
-  ROOT -.-> HANDOFF{{"Handoff<br/>verified subgraph slice"}}
-  CONF -.-> HANDOFF
-  HANDOFF -.->|"spawn successor with Tier-0 synthesis"| AGENT
+  ROOT -.->|"ancestry"| HANDOFF{{"Handoff<br/>verified subgraph slice"}}
+  CONF -.->|"confirmed filter"| HANDOFF
+  HANDOFF -.->|"spawn w/ Tier-0 synthesis"| AGENT
 
-  FB["feedback events<br/>(human + Grieve rejections)"] --> ANNALS
-  ANNALS -.-> COLD["Coldframe<br/>eval / refinement"]
-  COLD -.->|"replay frozen context (hermetic)"| RT
+  FB["feedback events<br/>(human + Grieve rejections)"] -->|"first-class events"| ANNALS
+  ANNALS -.->|"feedback + frozen context"| COLD["Coldframe<br/>eval / refinement"]
+  COLD -.->|"hermetic replay"| RT
 ```
 
 *Solid arrows are event writes into the log; dotted arrows are derivations/reads from it
