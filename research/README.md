@@ -52,6 +52,7 @@ Topics 01–06 and 09 are supporting design rationale.
 - `topics/07-runtime-design-resume-genealogy-handoff.md` — the core unified design
 - `topics/08-concrete-spec.md` — buildable layer: envelope, topics, fold rules, verifier, handoff protocol
 - `topics/09-agent-eval.md` — feedback-seeded, replay-based evals (Coldframe)
+- `topics/10-graft-harness-adapters.md` — Graft: pluggable adapters for any agent harness
 
 ## Papers
 - `papers/spark-to-fire/` — Xie et al. 2026, "From Spark to Fire: Modeling and

@@ -32,6 +32,35 @@ rollback (compensating events + re-fold) all the *same* mechanism.
 
 ---
 
+## D5 — Harness adapters: the Graft protocol (harness-agnostic)  (proposed 2026-07-01)
+
+**Decision (proposed):** Greenwood is **harness-agnostic**. Its only external contract is
+the **event envelope + a lifecycle protocol**; any harness (Claude Code, Codex, pi.dev,
+Hermes, …) plugs in through a **Graft** adapter — the only per-harness code. Ships as: a
+protocol spec (Protobuf envelope + gRPC lifecycle), per-language SDKs (Rust/TS/Python/Go),
+a conformance suite, and reference grafts.
+
+**Contract a Graft implements:** translate harness actions → events (claims optional —
+Greenwood can decompose from raw output, so a harness needn't be claim-aware); lifecycle
+`init / step / snapshot / resume / stop`; accept a handoff payload as starting context.
+
+**Two-tier conformance:** **correctness** (resume rebuilds correct state — required) vs.
+**cache-continuity** (byte-identical prompt so the content-addressed cache hits —
+best-effort). Honest split: not every third-party harness can hit byte-identity; those
+resume correctly and just pay a prefill.
+
+**Deployment:** sidecar (gRPC) by default; in-process for same-language embedding. Tool
+execution can sit on either side — the recorded events are identical (Coldframe hermetic
+replay depends on this).
+
+**Name:** Graft — a scion (the harness) grafted onto a rootstock (Greenwood). Registry
+availability not yet checked.
+
+**Related:** [[topics/10-graft-harness-adapters]], [[topics/06-agent-resume-and-caching]],
+[[topics/08-concrete-spec]].
+
+---
+
 ## D4 — Eval reproduction: hermetic replay, evals-as-events, statistical pass-rate  (proposed 2026-06-30)
 
 **Decision (proposed):** Agent evals are **seeded by feedback events** and built by

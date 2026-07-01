@@ -17,7 +17,8 @@ interactions so faulty branches can be monitored and pruned* before errors casca
 you're thinking in branches, roots, pruning, and cultivation, an arboreal naming set
 falls out naturally and each name carries real meaning about the component's job.
 
-All five were checked free on crates.io, npm, and PyPI at selection time (2026-06-30).
+The original five were checked free on crates.io, npm, and PyPI at selection (2026-06-30);
+**Graft** (added 2026-07-01) has not been registry-checked yet.
 
 | Component | Name | What it names | Why the name |
 |---|---|---|---|
@@ -26,10 +27,12 @@ All five were checked free on crates.io, npm, and PyPI at selection time (2026-0
 | **The lineage / genealogy DAG** | **Rootlines** | the branching provenance graph — which claim derives from / supports / contradicts which | roots tracing ancestry; the underground structure that shows where everything came from. |
 | **The verifier / governance layer** | **Grieve** | the process that screens claims, establishes trust, prunes faulty branches, isolates | a *grieve* is the Scots term for an estate overseer — the steward who walks the land, inspects it, and manages what grows and what gets cut back. |
 | **The eval / refinement system** | **Coldframe** | feedback → replay evals → reproduce → tweak-harness → iterate → regression suite | a cold frame is the box where seedlings are *hardened off* — toughened against real conditions before being transplanted out. It's where behavior is proven before it ships. |
+| **Harness adapters** | **Graft** | the adapter that plugs any agent harness (Claude Code, Codex, pi.dev, Hermes, …) into Greenwood | grafting joins a *scion* (a cutting from another plant) onto a *rootstock* — the harness is the scion, Greenwood the rootstock, the adapter the graft. |
 
-**How they fit together (one sentence):** agents live and work in **Greenwood**, every
-action they take is recorded in **Annals**, their reasoning is connected by **Rootlines**,
-**Grieve** decides what's trustworthy and prunes what isn't, and **Coldframe** turns
-real-world failures into a standing test suite that keeps the whole wood healthy.
+**How they fit together (one sentence):** any agent harness plugs into **Greenwood**
+through a **Graft**; every action it takes is recorded in **Annals**, its reasoning is
+connected by **Rootlines**, **Grieve** decides what's trustworthy and prunes what isn't,
+and **Coldframe** turns real-world failures into a standing test suite that keeps the
+whole wood healthy.
 
 *This is a living map — add new components (and the reasoning behind their names) here.*

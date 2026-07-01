@@ -32,6 +32,8 @@ Terra confirms the exact structure before creation.
 - **M5 — Agent eval & refinement.** Feedback events → auto-built replay evals →
   reproduce → tweak-harness → iterate → regression suite. Depends on M1 (replay) + M2
   (governance/lineage); can start once those land, before/alongside M3. (P9)
+- **M6 — Harness adapters (Graft).** Protocol + SDKs + conformance + reference grafts
+  (Claude Code, Codex, pi.dev, Hermes). Depends on M1 (envelope, runtime, resume). (P10)
 - **M4 — Hardening.** Sandboxing, rate-limit, cost, observability, multi-agent test
   harness. (P8, plus hardening tickets across P1–P7)
 
@@ -218,6 +220,36 @@ Hotspots/Chizu refinement loop on the bus.
   `descendants`/tags; one eval covers a cluster; blast-radius query drives targeting.
   Acceptance: related failures group; a root-cause eval validates against the cluster.
   Deps: T9.2, T4.2.
+
+## P10 — Graft (harness adapters)  · M6
+Refs: `topics/10-graft-harness-adapters.md`, `topics/08-concrete-spec.md`, D-log D5.
+
+- **T10.1 — Graft protocol spec.**
+  Why: the stable, language-neutral contract every harness maps onto. Scope: Protobuf
+  event envelope (shared with T1.1) + a gRPC lifecycle service
+  (`init / step / apply_tool_result / snapshot / resume / stop`) + a capability
+  descriptor. Acceptance: service compiles; a trivial echo graft drives a session
+  end-to-end. Deps: T1.1.
+- **T10.2 — Graft SDK (first language).**
+  Why: authors write only translation + lifecycle, not Kafka plumbing. Scope: base
+  trait/class + Kafka wiring (produce/consume, offsets, snapshot storage) + determinism
+  helpers (canonical serialization, breakpoint placement, "no wall-clock in prefix"
+  lint). Acceptance: a reference graft built on it passes conformance. Deps: T10.1, T1.3.
+- **T10.3 — Conformance suite.**
+  Why: pass it → resume/handoff/evals work with no per-harness special-casing. Scope:
+  event-mapping round-trip; correct-state resume; byte-identical resume (cache-continuity
+  tier); handoff injection; capability honesty. Acceptance: reports per-tier pass/fail for
+  a graft. Deps: T10.2, T3.2.
+- **T10.4 — Reference graft: Claude Code.** Deps: T10.2, T10.3.
+- **T10.5 — Reference graft: Codex.** Deps: T10.2, T10.3.
+- **T10.6 — Reference grafts: pi.dev + Hermes Agent.** Deps: T10.2, T10.3.
+- **T10.7 — Graft SDKs: TypeScript / Python / Go.**
+  Why: write adapters in the harness's own language. Scope: port the SDK surface +
+  conformance harness to each. Deps: T10.1, T10.3.
+- **T10.8 — Capability negotiation + harness-version tracking.**
+  Why: adapt runtime behavior per harness; handle resume across harness upgrades. Scope:
+  capability descriptor consumed by the runtime; harness version stamped on events; a
+  version bump drops resume to correctness-only. Deps: T10.1.
 
 ---
 

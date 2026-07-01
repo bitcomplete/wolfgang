@@ -4,7 +4,8 @@ Greenwood is an event-sourced agent runtime and coordination bus on Kafka. Every
 an agent takes is an immutable event; all state is a fold of the log. It exists to run
 many LLM agents reliably: resume them across host failures without losing prompt cache,
 hand work between them without propagating errors, and turn failures into regression
-tests — all from one substrate.
+tests — all from one substrate. It is harness-agnostic: any agent loop — Claude Code,
+Codex, pi.dev, Hermes, or your own — plugs in through a **Graft** adapter.
 
 ## Founding constraint
 
@@ -40,7 +41,7 @@ derivations/reads** (projections, replay, spawns). Annals is the shared spine.
 flowchart TB
   LLM@{ shape: cloud, label: "Model provider (claude-opus-4-8)" }
   subgraph RT["Agent runtime (stateless-recoverable)"]
-    AGENT["Agent process"]
+    AGENT["Agent harness<br/>(via Graft)"]
   end
   AGENT <-->|"content-addressed prompt cache"| LLM
 
@@ -63,7 +64,7 @@ deterministic replay. Handoff gives a successor a verified slice of the sender's
 
 ```mermaid
 flowchart TB
-  AGENT["Agent process"] -->|"self-declared claims<br/>(land unverified)"| ANNALS[["Annals — immutable event log"]]
+  AGENT["Agent harness<br/>(via Graft)"] -->|"self-declared claims<br/>(land unverified)"| ANNALS[["Annals — immutable event log"]]
   ANNALS -.->|"unverified claims<br/>(hubs · boundaries · high-risk)"| GRIEVE["Grieve<br/>verifier / governance"]
   GRIEVE -->|"confirmed / rejected / quarantined"| ANNALS
   ANNALS -.->|"fold: latest trust / claim"| CONF[["confirmed<br/>projection"]]
@@ -116,6 +117,11 @@ harness → re-run until it passes → keep it as a regression. Reproduction is 
 - **Does** — one recoverable process per agent. Loop: fold context → build prompt (with cache breakpoints) → call the model → stream and emit events → run tools → emit claims.
 - **Solves** — pods get rescheduled (eviction, OOM, drain, crash), and re-prefilling a long context on a new host is slow and expensive.
 - **Design** — state is a deterministic fold of the log, so any host rebuilds the exact same prompt bytes and hits the model's content-addressed prompt cache (1h TTL) — the cache isn't tied to a session or host, so a new pod hits the entry the dead one wrote. Snapshots bound replay cost; content-hash `event_id`s make replay idempotent; an interrupted call is re-issued on resume. A dead agent is picked up by consumer-group rebalance (small fleets) or a claim queue on the `control` topic (larger fleets).
+
+### Graft — harness adapters
+- **Does** — an adapter that plugs an agent harness (Claude Code, Codex, pi.dev, Hermes, or your own) into Greenwood by translating its native loop onto the event envelope + a lifecycle protocol (`init / step / snapshot / resume / stop`). Ships as a protocol spec, per-language SDKs, a conformance suite, and reference grafts.
+- **Solves** — Greenwood shouldn't be tied to one harness; supporting a new one should mean writing an adapter, not changing the bus.
+- **Design** — the bus's only external contract is the event envelope and the lifecycle protocol, so a graft is the only per-harness code. Conformance is two-tier: correctness (resume rebuilds correct state — required) and cache-continuity (byte-identical prompt so the cache hits — best-effort; a harness that can't meet it still resumes, just paying a prefill). Grafts run as sidecar processes (gRPC) or in-process. A harness needn't be claim-aware — Greenwood can decompose claims from its raw output.
 
 ### Handoff — genealogy-based
 - **Does** — an agent hands its successor a verified slice of the lineage (seed claims + their confirmed ancestors) as a short Tier-0 synthesis, expandable on demand to the underlying claims (Tier 1) and their evidence (Tier 2).
