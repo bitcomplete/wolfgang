@@ -168,7 +168,7 @@ Standard / IA / Glacier or Intelligent-Tiering) + PUT/GET requests + eval infere
 AutoMQ / Kafka / raw-S3. Compute is sized bottom-up (nodes = throughput ÷ per-node capacity,
 floored at an HA minimum), so it holds flat at small scale and grows with load:
 
-- **Interactive calculator (live):** <https://pin.bitcomplete.dev/public/p/01KWFE2V7J13FW0FY2S7FPBNYQ?token=Ff8U1tO5FqjoMm-GMuxKE1XWRNgZlpRafeLFJ05-PQk> *(public link, expires 2026-07-31)*
+- **Interactive calculator (live):** <https://pin.bitcomplete.dev/public/p/01KWJG0RQ57RJFT36KWN6BBRPC?token=BUQGHTE09HfiQnaitg4k4fsS4sQwNW-iA7sGBIqnvD4> *(public link, expires 2026-08-01)*
 - **Source (permanent):** [`research/cost-model/calculator.html`](../research/cost-model/calculator.html)
 
 ## Decisions
