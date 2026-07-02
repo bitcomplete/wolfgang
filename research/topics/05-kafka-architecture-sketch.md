@@ -30,7 +30,15 @@ realize them Kafka-natively, flagging where I diverge and why.
 - **Consumer groups + offsets** = replay, time-travel, and "resume from point"
   primitives, per-consumer.
 - **Log compaction** = materialized "latest state per key" topics (e.g. confirmed
-  claim state) without an external DB.
+  claim state) without an external DB. *Fleet-scale caveat:* the claim keyspace is
+  monotone (keys written ~2–3× then never again), so compaction converges to the whole
+  claim set at large fleets — claim state then needs TTL-after-terminal-state or a
+  DB-backed projection (measured analysis: topic 08 §2, D6).
+- **Caveat — tiering and compaction don't mix on vanilla Kafka:** KIP-405 explicitly
+  does **not** support compacted topics. So the raw log tiers to S3, but compacted
+  topics (`confirmed`, lineage projections) must stay on local replicated disk. They're
+  small (latest-per-key), so this is workable — and S3-native engines like AutoMQ
+  don't have the restriction at all (compaction runs against S3-backed storage; see D6).
 
 ## 1. The event envelope (the atom)
 Kafka record `value` = an **atomic-claim event** (see topic 03). Protobuf +

@@ -7,7 +7,7 @@ sources: [decisions, topics-05-08]
 created: 2026-06-30
 updated: 2026-06-30
 status: draft — the SOURCE for Linear ticket creation (do NOT create in Linear until Terra authorizes)
-summary: The Greenwood design decomposed into buildable units. 8 projects, 4 sequencing milestones, ~35 implementation-ready tickets. Each ticket has Why/Scope/Acceptance/Deps/Refs so it can become a Linear issue verbatim. Critical path: single-agent MVP → claims+governance → multi-agent handoff → hardening.
+summary: The Greenwood design decomposed into buildable units. 10 projects, 6 sequencing milestones, ~40 implementation-ready tickets. Each ticket has Why/Scope/Acceptance/Deps/Refs so it can become a Linear issue verbatim. Critical path: single-agent MVP → claims+governance → multi-agent handoff → eval + adapters → hardening.
 ---
 
 # Greenwood — Work Breakdown
@@ -29,12 +29,12 @@ Terra confirms the exact structure before creation.
   + lineage projections. Proves: event-sourced trust. (P4, P5)
 - **M3 — Multi-agent handoff.** Genealogy handoff, boundary gate, rewind. Proves the
   differentiator: traceable, error-gated handoff. (P6, P7)
-- **M5 — Agent eval & refinement.** Feedback events → auto-built replay evals →
+- **M4 — Agent eval & refinement.** Feedback events → auto-built replay evals →
   reproduce → tweak-harness → iterate → regression suite. Depends on M1 (replay) + M2
   (governance/lineage); can start once those land, before/alongside M3. (P9)
-- **M6 — Harness adapters (Graft).** Protocol + SDKs + conformance + reference grafts
+- **M5 — Harness adapters (Graft).** Protocol + SDKs + conformance + reference grafts
   (Claude Code, Codex, pi.dev, Hermes). Depends on M1 (envelope, runtime, resume). (P10)
-- **M4 — Hardening.** Sandboxing, rate-limit, cost, observability, multi-agent test
+- **M6 — Hardening.** Sandboxing, rate-limit, cost, observability, multi-agent test
   harness. (P8, plus hardening tickets across P1–P7)
 
 Foundational principle behind all of it: **P0 — event sourcing end-to-end** (see
@@ -50,7 +50,9 @@ Refs: `topics/05-kafka-architecture-sketch.md`, `topics/08-concrete-spec.md` §1
   Scope: define `Event` + payload variants (§1 of the spec); register in Schema Registry;
   codegen for the runtime language; content-hash `event_id` helper.
   Acceptance: round-trip encode/decode; backward-compat check passes; `event_id` is a
-  pure function of (payload + causal position). Deps: —.
+  pure function of (payload + causal position) per the canonical-hash spec (§1: pinned
+  field order, ts/producer/epoch excluded, schema_version-scoped) with **cross-language
+  hash test vectors**; `SerializationEpoch` control event defined. Deps: —.
 - **T1.2 — Topic + partition layout.**
   Why: ordering is load-bearing (D-ref: Chattermax lost it). Scope: create the 6 topics
   (§2) with correct keys/retention/compaction; **key `raw` by `lineage_root`**; tiered
@@ -97,13 +99,16 @@ Refs: `topics/06`, `topics/07` §4, D-log P0.
 - **T3.2 — Replay + deterministic state reconstruction.** Scope: load latest snapshot →
   replay `raw` after its offset → rebuild messages array **byte-identically**. Acceptance:
   reconstructed prompt is byte-equal to the pre-crash prompt (golden test). Deps: T3.1, T2.2.
-- **T3.3 — Agent acquisition on reschedule.** Scope: consumer-group rebalance (small
-  fleets) OR claim-on-`control` queue (scale); a new pod picks up a dead agent from
-  committed offset. Acceptance: kill a pod mid-task → a new pod resumes and completes.
-  Deps: T3.2, T1.4.
+- **T3.3 — Agent acquisition on reschedule + producer fencing.** Scope: consumer-group
+  rebalance (small fleets) OR claim-on-`control` queue with expiry (scale); acquisition
+  emits `Control{ACQUIRE}` bumping the `session_epoch`; folds reject stale-epoch events
+  (topic 08 §2a). Acceptance: kill a pod mid-task → a new pod resumes and completes;
+  **zombie test**: a paused-not-dead pod resumes producing after reassignment and its
+  events are rejected by every fold. Deps: T3.2, T1.4.
 - **T3.4 — Resume cache-continuity test.** Scope: end-to-end test that a resumed agent on
-  a different host hits the warm cache (within 1h TTL). Acceptance: `cache_read_input_
-  tokens > 0` post-resume; a deliberately-introduced nondeterminism makes it 0 (guard). Deps: T3.2.
+  a different host hits the warm cache (within the cadence-policy TTL — topic 06).
+  Acceptance: `cache_read_input_tokens > 0` post-resume; a deliberately-introduced
+  nondeterminism makes it 0 (guard). Deps: T3.2.
 
 ## P4 — Claims & lineage  · M2
 Refs: `topics/03`, `topics/01`, `topics/08` §1/§3, D-log D1.
@@ -136,8 +141,20 @@ Refs: `topics/02`, `topics/08` §4, D-log D1/D3/P0, `spark-to-fire` review.
   Acceptance: only policy-selected claims are verified; on-demand verification triggers
   at boundaries. Deps: T5.1.
 - **T5.4 — Circuit breaker.** Scope: cap retries K; persistent-unresolved → `QUARANTINED`
-  (high-risk tagged, excluded). Acceptance: a claim that can't be resolved is quarantined,
-  not retried forever. Deps: T5.1.
+  (excluded from trusted context — never forwarded-with-tag, per D3 refinement).
+  Acceptance: a claim that can't be resolved is quarantined, not retried forever. Deps: T5.1.
+- **T5.5 — Provenance audit (sampled re-decomposition).** Why: D1's edges are
+  self-declared and game-able; the audit restores independence. Scope: Grieve
+  periodically decomposes a sampled agent turn bus-side, diffs claims/edges against the
+  agent's self-declared set, emits a divergence event that adjusts that agent's
+  verification rate. Acceptance: a deliberately under-declaring test agent is detected
+  within N sampled turns; its verification rate rises. Deps: T5.1, T4.1.
+- **T5.6 — Effect gate.** Why: trust must govern actions, not just handoffs (topic 08
+  §5a). Scope: tool registry declares `effect_class` per tool; runtime blocks
+  IRREVERSIBLE tool calls whose premise claims aren't confirmed (or escalates to human);
+  REVERSIBLE requires a registered compensation handler. Acceptance: an unverified-premise
+  irreversible call is held pending verification; a reversible one runs and its
+  compensation is invoked on branch rewind. Deps: T5.1, T2.3.
 
 ## P6 — Multi-agent handoff (the differentiator)  · M3
 Refs: `topics/07` §5, `topics/08` §5, D-log D2/D3.
@@ -174,7 +191,7 @@ Refs: `topics/04`, `topics/08` §1(Control), D-log P0.
   (the garden's open Q#7); trigger resume or abandon. Acceptance: a stuck agent is
   detected and recovered/abandoned, not left dangling. Deps: T3.3, T7.1.
 
-## P8 — Ops & hardening  · M4
+## P8 — Ops & hardening  · M6
 Refs: `topics/08` §7 (cross-cutting ops problems).
 
 - **T8.1 — Tool/exec sandboxing.** (Docker/nspawn/seccomp — the garden left this open.)
@@ -185,7 +202,7 @@ Refs: `topics/08` §7 (cross-cutting ops problems).
 - **T8.5 — Multi-agent test/simulation harness** (the garden's open Q — test swarms
   deterministically by replaying event logs).
 
-## P9 — Agent eval & refinement  · M5
+## P9 — Agent eval & refinement  · M4
 Refs: `topics/09-agent-eval.md`, `topics/06` (replay), D-log P0/D4. Realizes the garden's
 Hotspots/Chizu refinement loop on the bus.
 
@@ -221,7 +238,7 @@ Hotspots/Chizu refinement loop on the bus.
   Acceptance: related failures group; a root-cause eval validates against the cluster.
   Deps: T9.2, T4.2.
 
-## P10 — Graft (harness adapters)  · M6
+## P10 — Graft (harness adapters)  · M5
 Refs: `topics/10-graft-harness-adapters.md`, `topics/08-concrete-spec.md`, D-log D5.
 
 - **T10.1 — Graft protocol spec.**

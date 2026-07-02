@@ -19,7 +19,14 @@ is grounded in the *Spark to Fire* paper (see `papers/`), whose lineage-graph go
 layer maps directly onto this design.
 
 Component names and the reasoning behind them are in **`NAMES.md`**
-(Greenwood · Annals · Rootlines · Grieve · Coldframe).
+(Greenwood · Annals · Rootlines · Grieve · Coldframe · Graft).
+
+> **A note on prior-art references.** Several topic notes compare Greenwood against
+> earlier internal Bit Complete design explorations — a family of prototypes we call
+> "the software garden" (names like *Chattermax*, *Chalet*, *Chizu*, *Gardener* appear
+> throughout). Those systems are referenced purely as prior art and lessons learned;
+> Greenwood is a fresh design with no dependency on them, and no familiarity with them
+> is needed to read these notes.
 
 ## How these notes are organized
 - Every file carries YAML front-matter in its **first 10 lines**, so it can be
@@ -29,7 +36,7 @@ Component names and the reasoning behind them are in **`NAMES.md`**
 
 ## Reading order
 1. `decisions.md` — the settled design decisions (P0 event-sourcing; D1 claims/verifier;
-   D2 handoff; D3 async; D4 evals). **Start here.**
+   D2 handoff; D3 async; D4 evals; D5 Graft; D6 backing store). **Start here.**
 2. `NAMES.md` — the component names and what each one is.
 3. `topics/07-*` — the unified runtime design (resume + genealogy handoff).
 4. `topics/08-concrete-spec.md` — the buildable layer (envelope, topics, folds, verifier,
@@ -38,7 +45,7 @@ Component names and the reasoning behind them are in **`NAMES.md`**
 Topics 01–06 and 09 are supporting design rationale.
 
 ## Key files
-- `decisions.md` — ADR-style decisions log (P0, D1–D4)
+- `decisions.md` — ADR-style decisions log (P0, D1–D6)
 - `NAMES.md` — component names + rationale
 - `WORK-BREAKDOWN.md` — projects / milestones / tickets
 

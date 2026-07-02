@@ -179,12 +179,13 @@
           <div class="field"><label for="rEbs">EBS gp3 ($/GB·mo)</label><input type="number" id="rEbs" value="0.08" step="0.001"></div>
           <div class="field"><label for="rStd">S3 Standard ($/GB·mo)</label><input type="number" id="rStd" value="0.023" step="0.001"></div>
           <div class="field"><label for="rIa">S3-IA ($/GB·mo)</label><input type="number" id="rIa" value="0.0125" step="0.0001"></div>
-          <div class="field"><label for="rGla">Glacier ($/GB·mo)</label><input type="number" id="rGla" value="0.0036" step="0.0001"></div>
+          <div class="field"><label for="rGla">Glacier Flexible ($/GB·mo)</label><input type="number" id="rGla" value="0.0036" step="0.0001"></div>
           <div class="field"><label for="rItS">IT Archive-Instant ($/GB·mo)</label><input type="number" id="rItS" value="0.004" step="0.0001"></div>
           <div class="field"><label for="rItM">IT monitoring ($/1k obj·mo)</label><input type="number" id="rItM" value="0.0025" step="0.0001"></div>
           <div class="field"><label for="rPut">PUT ($/1k)</label><input type="number" id="rPut" value="0.005" step="0.001"></div>
           <div class="field"><label for="rGet">GET ($/1k)</label><input type="number" id="rGet" value="0.0004" step="0.0001"></div>
-          <div class="field"><label for="rTr">Lifecycle transition ($/1k)</label><input type="number" id="rTr" value="0.01" step="0.001"></div>
+          <div class="field"><label for="rTrIa">Transition → IA ($/1k)</label><input type="number" id="rTrIa" value="0.01" step="0.001"></div>
+          <div class="field"><label for="rTrGla">Transition → Glacier ($/1k)</label><input type="number" id="rTrGla" value="0.03" step="0.001"></div>
           <div class="field"><label for="rAz">Inter-AZ ($/GB)</label><input type="number" id="rAz" value="0.01" step="0.001"></div>
         </details>
       </section>
@@ -210,6 +211,8 @@
         <details class="adv"><summary>Advanced rates — model (claude-opus-4-8)</summary>
           <div class="field"><label for="rIn">Input ($/M tok)</label><input type="number" id="rIn" value="5" step="0.5"></div>
           <div class="field"><label for="rCr">Cache-read ($/M tok)</label><input type="number" id="rCr" value="0.5" step="0.1"></div>
+          <div class="field"><label for="rWr">Cache-write ($/M tok)</label><input type="number" id="rWr" value="6.25" step="0.25">
+            <span class="hint">1.25× input for 5-min TTL; 2× ($10) for 1-hour TTL</span></div>
           <div class="field"><label for="rOut">Output ($/M tok)</label><input type="number" id="rOut" value="25" step="1"></div>
         </details>
       </section>
@@ -282,20 +285,34 @@
     var rf=ENG[eng].rf, az=ENG[eng].az;
 
     var A=num("agents"), tph=num("tph"), bpt=num("bpt"), ovh=num("ovh"), retD=num("ret");
-    var hotH=num("hotH"), stdD=num("stdD"), iaD=num("iaD"), segMB=num("seg");
+    // clamp: a typed 0 would silently zero every request cost
+    var hotH=num("hotH"), stdD=num("stdD"), iaD=num("iaD"), segMB=Math.max(num("seg"),0.001);
     var mode=radio("mode"), ramp=$("ramp").checked?0.5:1;
 
     var tokPerSec=A*tph/3600;     // tokens/s (fleet)
     var T=tokPerSec*bpt*ovh;      // bytes/s
     var retSec=retD*DAY;
     function win(a,b){a=Math.min(a,retSec);b=Math.min(b,retSec);return T*Math.max(0,b-a);}
-    var hotB=win(0,hotH*HR),
-        stdB=win(hotH*HR,stdD*DAY),
-        iaB =win(stdD*DAY,iaD*DAY),
-        glaB=win(iaD*DAY,retSec)*ramp;
+    // chained tier boundaries: a later tier can never start before the previous one
+    // ends, so inconsistent inputs (e.g. hot window past stdD) can't double-bill bytes.
+    var hotEnd=hotH*HR,
+        stdEnd=Math.max(stdD*DAY,hotEnd),
+        iaEnd =Math.max(iaD*DAY,stdEnd);
+    var hotB=win(0,hotEnd),
+        stdB=win(hotEnd,stdEnd);
+    // dwell = seconds a byte spends in a tier; steady-state resident bytes = T×dwell.
+    // AWS bills IA a 30-day minimum and Glacier a 90-day minimum on any early exit
+    // (transition or expiry), so billed dwell is floored at the minimum.
+    var iaDwell = Math.max(0, Math.min(iaEnd,retSec)-Math.min(stdEnd,retSec));
+    var glaDwell= Math.max(0, retSec-Math.min(iaEnd,retSec));
+    var iaBilledDwell = iaDwell>0 ? Math.max(iaDwell, 30*DAY) : 0;
+    var glaBilledDwell= glaDwell>0? Math.max(glaDwell,90*DAY) : 0;
+    var iaB =T*iaDwell,        iaBill =T*iaBilledDwell,
+        glaB=T*glaDwell*ramp,  glaBill=T*glaBilledDwell*ramp;
 
     var rEbs=num("rEbs"),rStd=num("rStd"),rIa=num("rIa"),rGla=num("rGla"),
-        rItS=num("rItS"),rItM=num("rItM"),rPut=num("rPut"),rTr=num("rTr"),rAz=num("rAz");
+        rItS=num("rItS"),rItM=num("rItM"),rPut=num("rPut"),
+        rTrIa=num("rTrIa"),rTrGla=num("rTrGla"),rAz=num("rAz");
 
     var objPerSec = segMB>0 ? T/(segMB*1e6) : 0;
     var objTotal  = objPerSec*retSec;
@@ -312,10 +329,12 @@
     $("engHint").textContent=ENG[eng].note+" · "+nodes+(nodes===1?" node → ":" nodes → ")+money(computeMo)+"/mo";
     var hotMo     = GB(hotB)*rf*rEbs;
 
-    // reads / replay — S3 GET (governed by segment size, not event count)
-    var runsYr = num("suite")*num("rerun")*num("samp");
+    // reads / replay — S3 GET (governed by segment size, not event count).
+    // Eval-replay GETs land in THIS (capture) bucket by design: they're S3 reads,
+    // not inference. Immaterial either way (<$1/yr at defaults), but attributed here.
+    var runsYr = num("suite")*num("rerun")*num("samp"); // shared with the eval bucket below
     var rGet=num("rGet"), gpe=num("gpe"), scanTB=num("scan");
-    var scanGETs = segMB>0 ? scanTB*1e12/(segMB*1e6) : 0;
+    var scanGETs = scanTB*1e12/(segMB*1e6);
     var totalGETs = runsYr*gpe + scanGETs;
     var getYr = totalGETs/1000*rGet;
 
@@ -323,10 +342,14 @@
     rows.push({name:"Hot — EBS ×"+rf, vol:hotB*rf, yr:hotMo*12});
 
     if(mode==="diy"){
-      var transMo=objPerSec*MO/1000*2*rTr; // std->ia->glacier = 2 transitions/object
+      // transitions only bill when data actually crosses into the class, at AWS's
+      // per-destination rates (into IA $0.01/1k; into Glacier Flexible $0.03/1k)
+      var toIa  = (stdB>0 && iaDwell>0) ? 1 : 0;
+      var toGla = (glaDwell>0 && (iaDwell>0 || stdB>0)) ? 1 : 0;
+      var transMo=objPerSec*MO/1000*(toIa*rTrIa + toGla*rTrGla);
       rows.push({name:"S3 Standard", vol:stdB, yr:GB(stdB)*rStd*12});
-      rows.push({name:"S3 Infrequent-Access", vol:iaB, yr:GB(iaB)*rIa*12});
-      rows.push({name:"Glacier"+(ramp<1?" (½ ramp)":""), vol:glaB, yr:GB(glaB)*rGla*12});
+      rows.push({name:"S3 Infrequent-Access"+(iaBill>iaB?" (30d min)":""), vol:iaB, yr:GB(iaBill)*rIa*12});
+      rows.push({name:"Glacier Flexible"+(glaBill>glaB?" (90d min)":"")+(ramp<1?" (½ ramp)":""), vol:glaB, yr:GB(glaBill)*rGla*12});
       rows.push({name:"Requests — PUT + transitions", vol:null, yr:(putMo+transMo)*12});
     }else{
       // Intelligent-Tiering auto-tiers on AWS's FIXED schedule (not the DIY windows):
@@ -334,7 +357,8 @@
       // No transition fees, but a per-object monitoring fee — and Archive Instant ($0.004)
       // can't reach Glacier's $0.0036/Deep Archive $0.00099, so it's a premium you pay for
       // instant access + no retrieval fees + no min-duration risk.
-      var itF=win(hotH*HR,30*DAY), itI=win(30*DAY,90*DAY), itA=win(90*DAY,retSec)*ramp;
+      var itFEnd=Math.max(30*DAY,hotEnd), itIEnd=Math.max(90*DAY,itFEnd);
+      var itF=win(hotEnd,itFEnd), itI=win(itFEnd,itIEnd), itA=win(itIEnd,retSec)*ramp;
       rows.push({name:"IT — Frequent (≤30d)", vol:itF, yr:GB(itF)*rStd*12});
       rows.push({name:"IT — Infrequent (30–90d)", vol:itI, yr:GB(itI)*rIa*12});
       rows.push({name:"IT — Archive Instant (90d+)"+(ramp<1?" (½ ramp)":""), vol:itA, yr:GB(itA)*rItS*12});
@@ -347,11 +371,13 @@
 
     var capYr=rows.reduce(function(s,r){return s+r.yr;},0);
 
-    // eval bucket
-    var suite=num("suite"),rerun=num("rerun"),N=num("samp"),ctx=num("ctx"),out=num("out");
-    var rIn=num("rIn"),rCr=num("rCr"),rOut=num("rOut"),cache=$("cache").checked;
-    var runCost=(cache?ctx*rCr:ctx*rIn)/1e6 + out*rOut/1e6;
-    var runsYr=suite*rerun*N;
+    // eval bucket — cache TTL (5min–1h) means each case's first sample per re-run
+    // WRITES the prefix (1.25× input for 5-min TTL); only the other N−1 samples read.
+    // Per-run context rate = amortized (write + (N−1) reads) / N.
+    var N=num("samp"),ctx=num("ctx"),out=num("out");
+    var rIn=num("rIn"),rCr=num("rCr"),rWr=num("rWr"),rOut=num("rOut"),cache=$("cache").checked;
+    var ctxRate = cache ? (rWr+(N-1)*rCr)/Math.max(N,1) : rIn;
+    var runCost = ctx*ctxRate/1e6 + out*rOut/1e6;
     var evalYr=runsYr*runCost;
 
     // render stat cards
@@ -396,9 +422,16 @@
       +"S3 requests are priced (PUT on ingest, GET on every replay) but both scale with <code>segment size</code>, not event count — "
       +"batching events into MB-scale segments keeps them tiny; set the segment near 1&nbsp;KB (object-per-event) to watch them explode. "
       +"In-region reads to compute incur no egress fee; Glacier retrieval fees apply only if replays hit archived data, so keep "
-      +"eval-referenced contexts in a warm tier. Per-object minimums and committed-use discounts not modeled. "
+      +"eval-referenced contexts in a warm tier. IA/Glacier minimum storage durations (30/90&nbsp;d) and per-destination "
+      +"transition fees <em>are</em> modeled; not modeled (all conservative): S3 Standard volume discounts "
+      +"($0.021–0.022/GB above 50&nbsp;TB), committed-use discounts, and EBS being provisioned rather than "
+      +"usage-billed (size for peak + provisioned MB/s, not average bytes). "
+      +"A third bucket — governance &amp; handoff inference (claim decomposition, verification, the handoff gate) — "
+      +"is not modeled here; at fleet scale it plausibly rivals the eval bucket (see topic 11). "
       +"Eval assumes hermetic replay (recorded tool-results as fixtures → no tool cost); "
-      +(document.getElementById('cache').checked?"frozen prefix billed at cache-read rate.":"frozen prefix billed at full input rate.");
+      +(document.getElementById('cache').checked
+        ?"context billed as one cache write per case per re-run + cache-reads for the other samples (amortized)."
+        :"frozen prefix billed at full input rate.");
   }
 
   document.getElementById("ctl").addEventListener("input",calc);

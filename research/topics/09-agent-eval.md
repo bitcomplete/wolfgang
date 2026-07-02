@@ -107,3 +107,7 @@ after a change is how you know a tweak helped. Harness versions and eval runs ar
 - Relationship to `evidence_ref` drift — if a hermetic fixture (recorded tool result)
   becomes stale vs. the real world, the eval tests past-reality; acceptable for behavior
   regression, note it.
+- **Model drift** — "only the model varies" quietly becomes "the model was retired" over
+  a multi-year regression suite; pass-rate history is confounded across model migrations.
+  Record the model id per run (it's in the events), re-baseline the suite on each model
+  migration, and never compare pass-rates across baselines.

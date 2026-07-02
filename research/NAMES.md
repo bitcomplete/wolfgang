@@ -4,7 +4,7 @@ topic: Component names and the rationale behind them
 project: Greenwood
 tags: [naming, greenwood, annals, rootlines, grieve, coldframe]
 created: 2026-06-30
-updated: 2026-06-30
+updated: 2026-07-02
 status: active
 summary: The five components of the system and why each is named as it is. Theme is arboreal/forest — chosen because the founding design insight was "preserve the tree of agentic interactions so faulty branches can be monitored and pruned." Names were checked free on crates.io / npm / PyPI.
 ---
@@ -17,8 +17,13 @@ interactions so faulty branches can be monitored and pruned* before errors casca
 you're thinking in branches, roots, pruning, and cultivation, an arboreal naming set
 falls out naturally and each name carries real meaning about the component's job.
 
-The original five were checked free on crates.io, npm, and PyPI at selection (2026-06-30);
-**Graft** (added 2026-07-01) has not been registry-checked yet.
+The original five were checked free on crates.io, npm, and PyPI at selection (2026-06-30).
+**Graft** (added 2026-07-01) was registry-checked 2026-07-02: the bare name is **taken on
+all three registries** — most notably `graft` on crates.io (orbitinghail's transactional
+storage engine, ~1.5k★, active) — plus a dormant npm package (2022) and a placeholder on
+PyPI. Since Graft here is a *component* of Greenwood, not a standalone package name,
+published artifacts should be namespaced (e.g. `greenwood-graft` / `@greenwood/graft`);
+the bare name is not available.
 
 | Component | Name | What it names | Why the name |
 |---|---|---|---|

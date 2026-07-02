@@ -112,12 +112,12 @@ harness → re-run until it passes → keep it as a regression. Reproduction is 
 ### Grieve — verifier / governance
 - **Does** — a separate process that reads claims, screens them, and emits `trust_transition` events (`unverified` → `confirmed` / `rejected` / `quarantined`). `confirmed` is the running view built from those events.
 - **Solves** — agents can be wrong or prompt-injected, so trust must be set by something other than the agent; and a bad claim has to be actively stopped, since detecting it doesn't by itself stop it spreading.
-- **Design** — an agent can't certify its own claims, so a separate process assigns trust. It's async: claims flow immediately and an agent can use its own unverified claims as scratch, but only `confirmed` counts as shared context. Verification is selective (hub roles, handoff boundaries, high-risk claims). Rollback is a compensating event, not a delete. A circuit breaker quarantines claims that keep failing. Grieve's verdicts are events too, so they're auditable.
+- **Design** — an agent can't certify its own claims, so a separate process assigns trust. It's async: claims flow immediately and an agent can use its own unverified claims as scratch, but only `confirmed` counts as shared context. Verification is selective (hub roles, handoff boundaries, high-risk claims) — and because provenance edges are self-declared, Grieve also runs sampled independent re-decomposition audits (decompose raw output bus-side, diff against the agent's declared claims; divergence lowers that agent's trust and raises its verification rate). Rollback is a compensating event, not a delete. A circuit breaker quarantines claims that keep failing. Grieve's verdicts are events too, so they're auditable — and periodically audited for verifier drift.
 
 ### Agent runtime — resume + cache continuity
 - **Does** — one recoverable process per agent. Loop: rebuild context (replay the log) → build prompt (with cache breakpoints) → call the model → stream and emit events → run tools → emit claims.
 - **Solves** — pods get rescheduled (eviction, OOM, drain, crash), and re-prefilling a long context on a new host is slow and expensive.
-- **Design** — an agent's state is derived deterministically from its logged events, so any host rebuilds the exact same prompt bytes and hits the model's content-addressed prompt cache (1h TTL) — the cache isn't tied to a session or host, so a new pod hits the entry the dead one wrote. Snapshots bound replay cost; content-hash `event_id`s make replay idempotent; an interrupted call is re-issued on resume. A dead agent is picked up by consumer-group rebalance (small fleets) or a claim queue on the `control` topic (larger fleets).
+- **Design** — an agent's state is derived deterministically from its logged events, so any host rebuilds the exact same prompt bytes and can hit the model's content-addressed prompt cache — the cache is scoped to the API workspace, not to a session or host, so a new pod hits the entry the dead one wrote. Cache continuity is an opportunistic latency win, not an economic pillar: it pays off within the cache TTL (a per-agent policy set by turn cadence — 5-min default; 1h only for slow-cadence agents, since its write premium exceeds the crash-resume payout otherwise), and it's best-effort for third-party harnesses (see Graft). Snapshots bound replay cost; content-hash `event_id`s make replay idempotent; an interrupted call is re-issued on resume. A dead agent is picked up by consumer-group rebalance (small fleets) or a claim queue on the `control` topic (larger fleets), with a per-session epoch fencing out zombie producers.
 
 ### Graft — harness adapters
 - **Does** — an adapter that plugs an agent harness (Claude Code, Codex, pi.dev, Hermes, or your own) into Greenwood by translating its native loop onto the event envelope + a lifecycle protocol (`init / step / snapshot / resume / stop`). Ships as a protocol spec, per-language SDKs, a conformance suite, and reference grafts.
@@ -141,7 +141,12 @@ replaying the log:
 
 - **Resume** — replay an agent's own history to rebuild its exact context.
 - **Handoff** — give a successor a verified slice of that history.
-- **Rollback** — append a corrective event; downstream state re-derives, nothing is deleted.
+- **Rollback** — append a corrective event; downstream *derived state* re-derives, nothing
+  is deleted. Scope honesty: this repairs **belief**, not the world — external tool
+  effects don't rewind. Reversible effects run registered compensation handlers (as
+  events); irreversible ones require confirmed premises *before* execution (the effect
+  gate) and human remediation after. And re-deriving an LLM branch is regeneration at
+  inference cost, not a deterministic re-fold.
 - **Eval** — replay a saved slice of history to reproduce a past run.
 
 Because they share that one move, they share one implementation. Rootlines carries all of
@@ -149,9 +154,12 @@ it: the resume substrate, the handoff payload, the audit graph, and the index ev
 
 ## Cost
 
-Two buckets, very different in character: **state capture / replay** (storage + transport
-— cheap; low tens of $k/yr for 500 agents on an object-store-native engine) and **eval
-inference** (re-running flows through the model — dominant at any real regression cadence).
+Three buckets, very different in character: **state capture / replay** (storage +
+transport — cheap; low tens of $k/yr for 500 agents on an object-store-native engine),
+**eval inference** (re-running flows through the model — large at any real regression
+cadence), and **governance & handoff inference** (claim decomposition, verification, and
+the per-handoff gate — the marginal cost Greenwood itself adds, plausibly rivaling evals;
+the real ROI question is whether it's paid back by avoided cascade-redo).
 Full model and the 500-agent-year worked estimate:
 [`research/topics/11-scalability-and-cost.md`](../research/topics/11-scalability-and-cost.md).
 

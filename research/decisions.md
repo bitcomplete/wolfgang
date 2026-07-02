@@ -12,6 +12,9 @@ summary: Running log of resolved/proposed design decisions for Greenwood, most r
 
 # Greenwood — Decisions Log
 
+*Ordering: P0 (the foundational principle) is pinned first; the D-entries below it run
+newest-first, append-at-the-top — read bottom-up (D1→D6) for chronological order.*
+
 ## P0 — FOUNDATIONAL PRINCIPLE: event sourcing end-to-end  (Terra, 2026-06-30)
 
 **Everything is event sourcing, top to bottom and back up again.** Every input, every
@@ -30,6 +33,15 @@ mutable state — not trust, not lifecycle, not snapshots. Concretely:
 This is what makes resume (state = fold), handoff (slice = fold as-of offset), and
 rollback (compensating events + re-fold) all the *same* mechanism.
 
+**Scope honesty (added 2026-07-02, red-team):** the shared mechanism governs *derived
+state* — belief. It does **not** rewind the world (a pushed commit, a sent email), and
+"re-derive" of an LLM branch is stochastic *regeneration* at inference cost, not a
+deterministic re-fold. Resume replays a recorded past; rollback repairs belief,
+quarantines descendants, runs registered compensation for reversible external effects,
+and surfaces irreversible ones for humans. Actions are therefore trust-gated too — see
+the **effect gate** (topic 08 §5a): irreversible tool effects require confirmed premises.
+This is recorded as its own design area (effect classes, compensation handlers).
+
 ---
 
 ## D6 — Backing store: keep the Kafka API, run it object-store-native  (proposed 2026-07-01)
@@ -38,29 +50,41 @@ rollback (compensating events + re-fold) all the *same* mechanism.
 replay, compaction, tiered retention) — but do **not** run on vanilla open-source Kafka.
 Greenwood's workload is write-heavy with rare/cold reads, and vanilla Kafka's bill is
 dominated by exactly the wrong things for that shape: hot storage × 3× replication, and
-inter-AZ replication traffic (~$0.02/GB ingested, often >50% of a Kafka bill). Read/egress
-— Kafka's expensive axis — is ~$0 here.
+inter-AZ replication traffic (~$0.04/GB ingested — 2 follower streams, both directions
+billed — often >50% of a Kafka bill). Read/egress — Kafka's expensive axis — is ~$0 here.
+Vanilla also can't tier compacted topics (KIP-405 excludes them), so the compacted
+projections would be pinned to replicated local disk.
 
-Run it on an **object-store-native, Kafka-compatible engine**: **AutoMQ** (full compaction
-via Kafka's real LogCleaner, ~20ms P99 with an EBS WAL, drop-in) or **WarpStream** (managed,
-drop-in — but mind compaction ceilings: 3M distinct keys / 128 GiB per job, immutable
-`cleanup.policy`). Both drop triple-replicated NVMe for S3 and remove cross-AZ replication →
-storage/network ~5–10× cheaper, **design + Graft adapters unchanged**. **Raw S3-as-log** is
-cheapest at scale but a full rewrite — fallback only. Rejected: Kinesis / Pub/Sub / NATS
-JetStream (no compaction, and/or no cheap cold tier, and/or full rewrite); Pulsar
-(compaction-on-tiered-data is a known bug).
+Run it on an **object-store-native, Kafka-compatible engine**: **AutoMQ** (Kafka fork —
+full compaction via Kafka's real LogCleaner, works on S3-backed storage so the KIP-405
+restriction doesn't apply; sub-10ms P99 single-AZ EBS WAL (~20ms multi-AZ); Apache 2.0
+since Apr 2025; drop-in) or **WarpStream** (managed, drop-in — but mind compaction
+ceilings: 3M distinct keys / 128 GiB per job, immutable `cleanup.policy`; vendor note:
+Confluent-owned, and IBM's acquisition of Confluent closed 2026-03-17). Both drop
+triple-replicated NVMe for S3 and remove cross-AZ replication → storage/network ~5–10×
+cheaper, **design + Graft adapters unchanged**. **Raw S3-as-log** is cheapest at scale
+but a full rewrite — fallback only. Rejected: Kinesis / Pub/Sub (no compaction; 365d/31d
+retention ceilings); NATS JetStream (no cold/object-store tier; per-subject last-N
+retention is not Kafka-style compaction); Pulsar (topic compaction fails on S3 tiered
+storage — apache/pulsar#8282, unfixed).
 
 **Also adopt (engine-independent):** payloads-by-reference (large tool outputs → S3 blob +
-hash in the event; ~3,000× ingest-vs-store gap), snapshot-to-bound-hot-retention, and
-cold-tier to S3-IA/Glacier for the multi-year archive.
+hash in the event; ingest-vs-store gap ≈3,300×, derived from W&B Weave's $0.10/MB ingest
+vs $0.03/GB·mo storage), snapshot-to-bound-hot-retention, and cold-tier to S3-IA/Glacier
+for the multi-year archive.
 
 **Cost shape (from the 500-agent-year model, topic 11):** at 500 agents Greenwood is a
 *small* throughput workload (sub-10 MB/s) — storage- and compute-floor-bound, not
 throughput-bound. State capture ≈ **low tens of $k/yr**. The **eval (Coldframe) bucket is
 LLM-inference-dominated and dwarfs storage** at any real regression cadence.
 
-**Open:** verify compaction on the chosen engine against real `lineage_root` cardinality;
-measure produce latency on the S3 path.
+**Open:** measure produce latency on the S3 path. **Resolved (2026-07-02, by analysis):**
+compaction-vs-cardinality — the claim keyspace is *monotone* (each `claim_id` written
+~2–3× then never again), so latest-per-key compaction converges to the full claim set at
+fleet scale (~112 TB/yr at 500k agents; WarpStream's 3M-keys/partition budget exhausted in
+hours). Compaction stays for bounded keyspaces (snapshots, agent lifecycle); claim state
+needs **TTL-after-terminal-state** (archive + drop from the compacted view) or a DB-backed
+projection — pick one before M2 (see topics 05/08).
 
 **Related:** [[topics/11-scalability-and-cost]], [[topics/05-kafka-architecture-sketch]],
 [[topics/10-graft-harness-adapters]].
@@ -132,14 +156,25 @@ context read the **`confirmed` projection**, never `raw`.
 **trust boundary** (handoff / entering another agent's confirmed context) there is a
 *local* await — the handoff triggers on-demand verification of its slice and B spawns
 once the slice's verdict-events resolve. Confirmed claims cross; rejected are dropped/
-repaired; unresolved follow circuit-breaker policy (forward high-risk-tagged or exclude).
-If B was spawned optimistically and a slice-claim later flips to `rejected`, emit a
-rewind event on B's branch. Local synchronization, not global inline-blocking.
+repaired; unresolved are **excluded** (refined 2026-07-02: never "forward with a
+high-risk tag" — an LLM reading the briefing won't reliably discount a tag).
+**Optimistic spawn** (B starts before the slice fully resolves) is confined to work
+whose tool effects are `PURE`/`REVERSIBLE` (see the effect gate, topic 08 §5a); if a
+slice-claim later flips to `rejected`, emit a rewind event on B's branch — belief repair
++ compensation, per P0's scope-honesty note. Local synchronization, not global
+inline-blocking. "Read `confirmed`, never `raw`" is **ACL-enforced**, not conventional
+(topic 08 §2b).
 
 **Why not inline:** inline blocking fights Kafka's async grain and puts verification
 latency in every critical path; the safety inline would buy is recovered by the boundary
 gate (unconfirmed claims simply never enter a *trusted* context) without stalling the
-whole system.
+whole system. **Honest ledger note:** handoffs *are* a critical path in a multi-agent
+system, and the gate puts LLM calls (slice verification + synthesis + entailment) in
+each one — the latency moved from every-message to per-handoff; it didn't vanish.
+Gate latency is a measured budget item (see topic 11's governance-inference bucket).
+The verifier itself is monitored for drift (its verdicts are events; a periodic audit
+re-verifies a sample against ground truth — the circuit breaker covers claims, not a
+drifting verifier).
 
 **Related:** [[topics/02-bus-vs-governance-boundary]], [[topics/07-runtime-design-resume-genealogy-handoff]]
 
@@ -160,6 +195,10 @@ disclosure**, all tiers provenance-linked:
 (entailment: asserts only what the confirmed set entails — no hallucinated/distorted
 claims) BEFORE it crosses to B. Lazy expansion complements this, it does NOT replace it
 — B reasons over the briefing first and could act on a distortion before expanding.
+*(Precision note, 2026-07-02: the entailment check is itself an LLM judgment — a
+stochastic filter with a nonzero false-pass rate at exactly the boundary the system
+protects. Its residual error rate is a monitored quantity; high-risk handoffs run two
+independent checkers.)*
 
 **The synthesis is not a special "bus summary" feature** — it's just another governed
 agent output (a claim), produced by a process beside the bus, subject to D1's
@@ -230,10 +269,22 @@ plug-in over *unmodifiable* MAS frameworks. We build the runtime, so we can make
 agent emit its own claims — getting provenance from the source instead of
 reverse-engineering it. A greenfield advantage.
 
-**Residual risk (accepted, monitor):** an agent could lie about provenance to hide an
-error's origin. Bounded because (a) its real context is in the log and auditable, and
-(b) governance verifies *content* independently, so a mis-attributed-but-false claim is
-still rejected on its merits.
+**Residual risk (revised 2026-07-02, red-team):** an agent could lie about provenance to
+hide an error's origin — and the original bound ("auditable log + independent content
+checks") is insufficient on its own: content is only checked for the *selectively
+verified* subset, and the selection policy (hub/centrality) is computed from the same
+self-declared edges the audited party controls. Split a hub claim into ten, or point
+edges at innocuous parents, and you stay under the verification radar; a rejected claim's
+`descendants()` then under-cuts the rewind. **Mitigations (adopted):**
+- **Sampled independent re-decomposition audits** — Grieve periodically decomposes raw
+  output bus-side (the paper's mechanism, as a spot-check) and diffs against the agent's
+  self-declared claims/edges; divergence is itself an event that lowers the agent's (or
+  graft's) trust and raises its verification rate.
+- **Conservative rewind fallback** — blast radius = `descendants(claim)` ∪ everything in
+  the lineage after the rejected claim's offset (topic 08 §3).
+- Centrality/risk-based verification selection must never be computed *solely* from
+  self-declared edges (mix in offset-order, adoption counts from handoffs, and audit
+  divergence history).
 
 **Related:** [[topics/03-atomic-claim-envelope]], [[topics/07-runtime-design-resume-genealogy-handoff]]
 

@@ -7,7 +7,7 @@ sources: [claude-api-skill, engineering]
 created: 2026-06-30
 updated: 2026-06-30
 status: draft
-summary: An agent's trajectory is Kafka events keyed by agent-session (ordered). Resume = replay-from-snapshot to rebuild the messages array DETERMINISTICALLY, so the reconstructed prompt prefix is byte-identical and hits the content-addressed LLM cache from a different pod. Anthropic cache is content-addressed (not session-bound) → any host reproducing identical bytes within TTL hits it. Use 1h TTL to survive reschedules.
+summary: An agent's trajectory is Kafka events keyed by agent-session (ordered). Resume = replay-from-snapshot to rebuild the messages array DETERMINISTICALLY, so the reconstructed prompt prefix is byte-identical and hits the content-addressed LLM cache from a different pod. Anthropic cache is content-addressed (not session-bound) → any host reproducing identical bytes within TTL hits it. TTL is a per-agent policy keyed on turn cadence (5-min default).
 ---
 
 # Agent resume + LLM cache continuity
@@ -35,7 +35,8 @@ losing the LLM provider's prompt cache (re-prefilling a long context is slow + c
   `cache_control:{type:"ephemeral", ttl:"1h"}` (2× write). Refreshed on each hit.
 - **Any byte change anywhere in the prefix invalidates everything after it.** Silent
   invalidators: `datetime.now()`, UUIDs, unsorted JSON, a varying tool set.
-- Min cacheable prefix: 4096 tokens (Opus 4.8) / 2048 (Sonnet 4.6). Verify with
+- Min cacheable prefix: **1,024 tokens** (both Opus 4.8 and Sonnet 4.6; per current
+  Anthropic docs, 2026-07). Below-minimum prompts silently don't cache. Verify with
   `usage.cache_read_input_tokens`.
 - **Model is `claude-opus-4-8`** (1M context) for this project's agents.
 
@@ -66,7 +67,10 @@ a real alternative architecture worth weighing vs. self-hosting the loop on Kafk
      finite (~thousands) so it caps concurrent agents.
    - *Claim/work-queue:* a `control`-topic claim ("agent X needs a worker"); pods
      claim sessions. Scales past partition limits. (Likely the general answer;
-     partition-per-agent for small fleets.)
+     partition-per-agent for small fleets.) Claims carry an **expiry**, and every
+     acquisition bumps the session's **epoch** (`Control{ACQUIRE}`) — consumer groups
+     fence consumption, not production, so without the epoch a partitioned "dead" pod
+     can keep producing and interleave a divergent history (see topic 08 §2a).
 2. **Rebuild state:** load latest snapshot, replay events after its offset, reconstruct
    the in-memory messages array.
 3. **Re-issue next LLM call** with the *same* `cache_control` breakpoints → cache hit,
@@ -85,10 +89,16 @@ event log** — byte-identical regardless of which pod builds it:
   you silently pay full prefill. This is the #1 failure mode — test it.
 
 ### TTL choice
-Use **`ttl:"1h"`**. Pod eviction → reschedule → image pull → warmup routinely exceeds
-5 min; the 5-min cache would be cold by the time the new pod issues its first call.
-1h survives typical reschedules. Past TTL: cache cold, correctness preserved, pay one
-prefill. (Refresh-on-use keeps it warm while the agent is actively looping.)
+**Per-agent policy keyed on turn cadence — default 5-min** (revised 2026-07-02).
+The blanket-1h prescription had the economics upside-down: the 1h write premium
+($10 vs $6.25/M on every net-new prefix token, ~600k tok/agent·hr) costs
+≈ $2.25/agent·hr *always-on*, while the payout — one avoided cold prefill on a
+crash-resume — is ≈ $0.90 at 200K context. Break-even needs >2 crashes per
+agent-*hour*. Since reads refresh the TTL for free, a fast-looping agent's 5-min
+cache never expires between turns anyway; and overnight/queued resumes blow *any*
+TTL. Use **1h only for agents with 5–60-min turn cadence** (the one regime where it
+pays); everywhere else, 5-min + accept a cold prefill on the rare reschedule —
+correctness is unaffected either way.
 
 ### In-flight call at crash
 If the pod dies mid-LLM-call, the response was never persisted to Kafka. On replay the

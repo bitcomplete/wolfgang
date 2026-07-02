@@ -68,7 +68,7 @@ claim-on-`control` queue to scale past partition count) → loads latest `snapsh
 entry → replays `raw` after that offset → **rebuilds the messages array
 byte-identically** → re-issues the next LLM call with the same breakpoints → **cache
 hit from a different host** (Anthropic cache is content-addressed, not session-bound;
-shared across the org). Use **`ttl:"1h"`** to survive reschedule latency. In-flight
+shared across the org). TTL is per-agent policy — 5-min default; `ttl:"1h"` only for 5–60-min turn cadence (the write premium exceeds the crash-resume payout otherwise; topic 06). In-flight
 call at crash → re-issue (prefix cached, generation redone); stream deltas into `raw`
 to salvage partials. `event_id` = content hash → replay never double-emits.
 
@@ -114,8 +114,12 @@ handed **confirmed** claims only; A's unverified/rejected/quarantined claims nev
 B's trusted context. The handoff is a governance checkpoint: false-consensus can't
 propagate A→B because only screened claims cross. And when a handed claim is later
 flipped to `rejected`, you query the DAG for every agent whose work is `derived_from`
-it and **rewind/re-verify just those branches** — surgical multi-agent rollback, not a
-global redo. (Rewind = compensating event + re-derive, never deletion — topic 02.)
+it (∪ a conservative offset-based fallback — edges are self-declared, D1) and
+**rewind/re-verify just those branches** — targeted multi-agent rollback, not a global
+redo. Scope honesty: rewind = compensating event + re-derive of *derived state*, never
+deletion (topic 02) — it repairs belief; external tool effects need the effect gate +
+compensation story (topic 08 §5a), and re-running a branch is stochastic regeneration
+at inference cost.
 
 ## 6. How the three compose (the payoff)
 - **Determinism** (§3) is the single mechanism. It makes an agent's context a pure
@@ -134,7 +138,7 @@ loop:
   events   = consume(raw, key=my.lineage_root, from=my.committed_offset)
   ctx      = confirmed_slice(my.context_claims) ++ my.turns(events)   # deterministic
   prompt   = layer(system[bp1], ctx[bp2], task, my.turns)             # cache_control at bp1,bp2
-  resp     = llm.call(prompt, ttl="1h")                               # cache hit on bp1/bp2
+  resp     = llm.call(prompt, ttl=policy.ttl)                          # cache hit on bp1/bp2
   emit(raw, stream_deltas(resp))                                      # salvageable partials
   for call in resp.tool_calls: emit(raw, tool_result(exec(call)))
   claims   = decompose(resp)                                          # atomic claims
@@ -155,4 +159,10 @@ loop:
 - **Snapshot cadence** N vs. replay cost; whether snapshot inlines the confirmed slice
   (stable bytes, cheap rebuild) or points to it.
 - **Cross-lineage handoff** — if B's work spans two lineage_roots, its ordering/partition
-  story needs care (a handoff can join branches).
+  story needs care (a handoff can join branches). Consequence (red-team, 2026-07-02):
+  because edges cross lineage_roots, a per-lineage-partitioned projector cannot answer
+  `descendants()` locally — Rootlines needs a **global read store** (DB-backed
+  projection), and its risk/centrality signals *lag the log*: a claim becomes a hub only
+  after adoption, so hub-based selective verification structurally trails adoption. The
+  boundary gate is the compensating control (staleness at a gate fails conservative);
+  record "hub detection lags adoption" as a known limit.
