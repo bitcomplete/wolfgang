@@ -25,7 +25,7 @@ Terra confirms the exact structure before creation.
 - **M1 — Single-agent MVP.** Event spine + runtime + resume for ONE agent; no
   claims/governance/handoff. Proves: event-sourced loop, crash-resume, cache-hit on
   resume. (P1, P2, P3)
-- **M2 — Claims + governance.** Agent self-declares claims; verifier confirms; confirmed
+- **M2 — Claims + governance.** Bus-side decomposer + context manifests (D7); verifier confirms; confirmed
   + lineage projections. Proves: event-sourced trust. (P4, P5)
 - **M3 — Multi-agent handoff.** Genealogy handoff, boundary gate, rewind. Proves the
   differentiator: traceable, error-gated handoff. (P6, P7)
@@ -111,16 +111,21 @@ Refs: `topics/06`, `topics/07` §4, D-log P0.
   nondeterminism makes it 0 (guard). Deps: T3.2.
 
 ## P4 — Claims & lineage  · M2
-Refs: `topics/03`, `topics/01`, `topics/08` §1/§3, D-log D1.
+Refs: `topics/03`, `topics/01`, `topics/08` §1/§3/§4, D-log D1/D7.
 
-- **T4.1 — Agent self-declares claims (structured output).**
-  Why: D1 — agent proposes claims + provenance. Scope: agent emits `Claim` events
-  (unverified) with `derived_from`/tags as structured output in its turn; captures
-  implicit reliance. Acceptance: a turn produces atomic claims with provenance edges;
-  deterministic within the turn. Deps: T2.1, T1.1.
-- **T4.2 — Lineage DAG projection.** Scope: projector consumer folds claims into
-  `agent-bus.lineage` (adjacency); `descendants(claim_id)` query. Acceptance: DAG
-  rebuildable from replay; descendants query returns the rollback blast radius. Deps: T4.1.
+- **T4.1 — Context manifest + bus-side decomposer (D7).**
+  Why: D7 — the audited party must not author the graph the auditor samples from.
+  Scope: (a) runtime emits a `ContextManifest` event per turn (confirmed claims +
+  evidence refs present in the prompt — mechanical provenance); (b) a Grieve-side
+  decomposer consumes agent turns from `raw` and emits atomic `Claim` events
+  (unverified) with edges inferred from content + the manifest; agent-declared edges
+  land as untrusted hints only. Acceptance: a turn produces atomic claims with
+  provenance edges without any agent cooperation; manifest matches exactly what the
+  runtime assembled into the prompt (golden test). Deps: T2.1, T1.1.
+- **T4.2 — Lineage DAG projection.** Scope: projector consumer folds claims +
+  manifests into `agent-bus.lineage` (adjacency); `descendants(claim_id)` query;
+  rewind scope = descendants ∪ manifest envelope. Acceptance: DAG rebuildable from
+  replay; descendants query returns the rollback blast radius. Deps: T4.1.
 - **T4.3 — Claim tagging + deterministic grouping.** Scope: tags for topic/module;
   deterministic grouping (by tag/shared-ancestor) for handoff rendering — NO LLM
   summarization here. Acceptance: grouping is a pure function of claims+edges. Deps: T4.1.
@@ -143,12 +148,15 @@ Refs: `topics/02`, `topics/08` §4, D-log D1/D3/P0, `spark-to-fire` review.
 - **T5.4 — Circuit breaker.** Scope: cap retries K; persistent-unresolved → `QUARANTINED`
   (excluded from trusted context — never forwarded-with-tag, per D3 refinement).
   Acceptance: a claim that can't be resolved is quarantined, not retried forever. Deps: T5.1.
-- **T5.5 — Provenance audit (sampled re-decomposition).** Why: D1's edges are
-  self-declared and game-able; the audit restores independence. Scope: Grieve
-  periodically decomposes a sampled agent turn bus-side, diffs claims/edges against the
-  agent's self-declared set, emits a divergence event that adjusts that agent's
-  verification rate. Acceptance: a deliberately under-declaring test agent is detected
-  within N sampled turns; its verification rate rises. Deps: T5.1, T4.1.
+- **T5.5 — Triage classifier + tuning loop (D7).** Why: scale — LLM verification can't
+  run on every claim; the paper's own entailment leg is a small NLI classifier
+  (DeBERTa-v3-small). Scope: always-on classifier screens every claim against confirmed
+  context → `TriageScore{GREEN|RED|YELLOW}` events (RED ⇒ immediate quarantine; YELLOW ⇒
+  LLM verification queue); training pipeline derives labeled data from `TrustTransition`
+  history; new classifier versions are gated through Coldframe before promotion.
+  Acceptance: triage latency in ms not seconds; a planted contradiction is quarantined
+  without an LLM call; a fine-tuned version must beat the incumbent on the Coldframe
+  suite to promote. Deps: T5.1, T4.1, P9.
 - **T5.6 — Effect gate.** Why: trust must govern actions, not just handoffs (topic 08
   §5a). Scope: tool registry declares `effect_class` per tool; runtime blocks
   IRREVERSIBLE tool calls whose premise claims aren't confirmed (or escalates to human);

@@ -36,18 +36,31 @@ message Event {
     StreamDelta      stream_delta     = 16;
     Snapshot         snapshot         = 17;
     Control          control          = 18;
+    ContextManifest  context_manifest = 19;   // D7: mechanical provenance
+    TriageScore      triage_score     = 20;   // D7: classifier screen
   }
 }
-message Claim {                       // D1: emitted by the AGENT, lands unverified
+message Claim {                       // D7: emitted by the BUS-SIDE DECOMPOSER, lands unverified
   string claim_id = 1;
   enum Kind { FACTUALITY = 0; FAITHFULNESS = 1; } Kind kind = 2;
   string content = 3;
   string evidence_ref = 4;            // tool_result/source it should be checked against
-  repeated string derived_from = 5;   // provenance (agent knows best — D1)
+  repeated string derived_from = 5;   // inferred by the decomposer + turn's ContextManifest (D7)
   repeated string supports = 6;
   repeated string contradicts = 7;
   repeated string tags = 8;           // for deterministic grouping in handoff (D2)
   string source_turn_id = 9;
+  repeated string agent_hint_edges = 10; // optional agent-declared edges — untrusted hints only
+}
+message ContextManifest {             // D7: MECHANICAL provenance, emitted by the RUNTIME per turn
+  string turn_id = 1;
+  repeated string claim_ids_in_context = 2;  // confirmed claims present in the prompt
+  repeated string evidence_refs_in_context = 3;
+}                                     // un-gameable: the runtime built the prompt, so it knows
+message TriageScore {                 // D7: classifier screen, always-on, milliseconds
+  string claim_id = 1;
+  enum Verdict { GREEN = 0; RED = 1; YELLOW = 2; }  // entailed / contradicts / uncertain
+  Verdict verdict = 2; float score = 3; string classifier_version = 4;
 }
 message TrustTransition {             // D1: emitted by the VERIFIER; P0: trust is event-sourced
   string claim_id = 1;
@@ -130,18 +143,30 @@ runtime from `confirmed`.
 - **confirmed[claim_id]** = the `Claim` with `trust_state` = `to_state` of its latest
   `TrustTransition` (by partition order). `REJECTED`/`QUARANTINED` ⇒ excluded from any
   trusted context / handoff slice.
-- **lineage DAG** = nodes: claims; edges: `derived_from`/`supports`/`contradicts`.
-  Key query: `descendants(claim_id)` = rollback blast radius (who relied on X).
-  Edges are self-declared (D1), so on a rejection the rewind scope is
-  `descendants(claim) ∪ conservative fallback` (everything in the lineage after the
-  rejected claim's offset) — never `descendants()` alone (see D1's audit note).
+- **lineage DAG** = nodes: claims; edges: `derived_from`/`supports`/`contradicts`
+  (decomposer-inferred) + the turn-level **ContextManifest** edges (mechanical — D7).
+  Key query: `descendants(claim_id)` = rollback blast radius (who relied on X). Rewind
+  scope = fine-grained descendants ∪ the manifest envelope (every turn that had the
+  rejected claim in context, and everything derived from those turns) — the manifest is
+  the honest, un-gameable bound.
 - **agent state (resume)** = fold of `raw` for `agent_session_id` from the last
   `Snapshot.offset` forward → the messages array (topic 06). Must be a **pure function
   of the log** (canonical serialization; no ts/uuid/pod-id in the cached prefix).
 
-## 4. Verifier contract (separate process — D1, topic 02)
-- Consumes `raw`; selects claims to verify by **policy** (D1 Balanced: hub-role, at
-  handoff boundaries, high-risk). Others stay `UNVERIFIED`.
+## 4. Grieve pipeline (separate process — D1/D7, topic 02)
+- **Decomposer (D7):** consumes agent output from `raw`, splits it into atomic `Claim`s
+  (FActScore-style; small/cheap model), inferring `derived_from` edges from content +
+  the turn's `ContextManifest`. Agents don't decompose their own output.
+- **Classifier triage (D7):** an always-on NLI-style classifier (paper precedent:
+  DeBERTa-v3-small) screens every claim against the confirmed context in milliseconds →
+  `TriageScore{GREEN|RED|YELLOW}`. RED ⇒ quarantine immediately; GREEN ⇒ low verification
+  priority; YELLOW ⇒ the LLM verification queue. **Tuning loop:** `TrustTransition`
+  verdicts are accumulating labeled data — periodically fine-tune the classifier on
+  them; every new classifier version is gated through Coldframe (D4) before promotion,
+  like any harness change. Trust states are still assigned only by the verifier — the
+  classifier prioritizes, it never confirms.
+- **Verifier:** selects from the triage output by **policy** (Balanced: yellow + hub-role,
+  at handoff boundaries, high-risk). Others stay `UNVERIFIED`.
 - **Factuality** check: against `evidence_ref` / tools / world.
 - **Faithfulness** check: entailment against the evidence bundle the producer was given
   (unsupported/contradictory ⇒ `REJECTED`).
@@ -175,16 +200,17 @@ runtime from `confirmed`.
 
 ## 5a. Effect gate (symmetric to the handoff gate)
 Trust must govern **actions**, not just handoffs: before executing a `ToolCall` with
-`effect_class = IRREVERSIBLE`, the runtime requires the claims it's premised on
-(current turn's `derived_from` chain) to be **confirmed** — or escalates for human
-approval. `REVERSIBLE` requires a registered `compensation_ref`. `PURE`/`IDEMPOTENT`
+`effect_class = IRREVERSIBLE`, the runtime requires the claims it's premised on (the
+turn's `ContextManifest` set — mechanical, D7) to be **confirmed** — or escalates for
+human approval. `REVERSIBLE` requires a registered `compensation_ref`. `PURE`/`IDEMPOTENT`
 execute freely. This is the rollback story's other half: the cheaper the gate lets an
 unverified branch act on the world, the less "rewind" can ever mean.
 
 ## 6. Runtime loop (ties it together — topic 07 §7)
 consume(raw@lineage_root) → fold state → assemble prompt (cache_control bps) →
 LLM (opus-4-8, ttl per cadence policy) → emit stream_deltas → exec tools (effect gate §5a) → emit tool_results →
-emit self-declared claims (unverified) → on handoff run §5 → snapshot every N → commit.
+emit ContextManifest (D7; the decomposer + triage classifier run bus-side, not in the
+agent loop) → on handoff run §5 → snapshot every N → commit.
 
 ## 7. Cross-cutting (garden's unsolved ops problems — design targets)
 Exec/tool sandboxing; rate limiting (runaway agents); cost control (per-agent token

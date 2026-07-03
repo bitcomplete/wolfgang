@@ -66,7 +66,11 @@ granularity — you prune a faulty *claim* and its dependents, not a whole messa
   Balanced policy).
 
 ## Open questions
-- Who decomposes claims — the producing agent (self-declared) or a bus-side
-  decomposition service? Trust implications differ.
+- ~~Who decomposes claims — the producing agent (self-declared) or a bus-side
+  decomposition service?~~ **Decided (D1 2026-06-30, revised D7 2026-07-02):** bus-side
+  decomposer + mechanical runtime provenance (ContextManifest) + classifier triage;
+  agent-declared edges accepted only as untrusted hints. Self-declaration lost — the
+  audited party must not author the graph the auditor samples from.
 - Can coarse messages and atomic claims coexist (claims as an optional refinement
-  layer) for cheap paths?
+  layer) for cheap paths? (Partly answered by D7's triage: every claim gets the cheap
+  classifier pass; only yellow/hub/boundary claims get the expensive one.)

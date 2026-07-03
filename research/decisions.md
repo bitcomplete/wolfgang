@@ -44,6 +44,49 @@ This is recorded as its own design area (effect classes, compensation handlers).
 
 ---
 
+## D7 — Decomposition moves bus-side; mechanical provenance; classifier triage  (Terra, 2026-07-02 — revises D1)
+
+**Decision:** Drop **agent self-decomposition** (the agent "vibe-checking" its own output
+into claims). Three replacements:
+
+1. **Bus-side decomposition (paper-aligned).** A Grieve-side decomposer splits agent
+   output into atomic claims — independent, canonical, consistent across harnesses. This
+   is what *From Spark to Fire* actually built and evaluated end-to-end (decompose →
+   tri-state screen → policy-route → verify + rollback; BICR 0.89–0.94 across operating
+   points). It also closes D1's red-team gap **at the root**: the audited party no longer
+   authors the graph the auditor samples from, so the sampled re-decomposition *audit*
+   (old T5.5) is unnecessary — the decomposition simply *is* bus-side.
+2. **Mechanical provenance.** D1 chose self-declaration to capture *implicit reliance* —
+   but the runtime **constructs every turn's context**, so it can record that reliance
+   mechanically: a **context manifest** event per turn (which confirmed claims/evidence
+   were in the prompt). Turn-granular and slightly coarse, but un-gameable and ~free.
+   Fine-grained claim→claim edges are inferred by the decomposer where content supports
+   them; agent-declared edges are accepted only as untrusted *hints*. The conservative
+   rewind fallback (D1 revision) stops being a fallback — the manifest *is* the honest
+   envelope.
+3. **Classifier triage, tuned by the verifier (the scale answer).** The paper's
+   entailment leg is already a small classifier (DeBERTa-v3-small NLI). Generalize it:
+   an always-on, milliseconds-cheap classifier screens every claim against the confirmed
+   context (green = entailed / red = contradicts / yellow = uncertain); **LLM
+   verification runs only on yellow + hub + boundary claims**. Then the loop the paper
+   lacks (its authors call their risk predictor "not deployment-grade"): **Grieve's
+   verdicts are events, i.e. accumulating labeled data** — periodically fine-tune the
+   classifier on them, and gate each new classifier version through **Coldframe** like
+   any other harness change (eval-the-evaluator). Classifier scores are events too (P0).
+
+**Cost note:** this moves decomposition cost from agent-side structured output (~5–15%
+output-token overhead on all traffic) to a bus-side pass (small-model, input-heavy) —
+similar dollars, better independence; the classifier triage is what keeps the expensive
+LLM-verification bucket budgeted (topic 11, governance bucket).
+
+**Supersedes:** D1's "agent proposes structure+provenance" half and its audit
+mitigation. D1's core split stands: truth-value is established independently, and the
+three-parties boundary (agent / verifier / dumb bus) is unchanged.
+
+**Related:** [[topics/03-atomic-claim-envelope]], [[topics/08-concrete-spec]], D1, D4.
+
+---
+
 ## D6 — Backing store: keep the Kafka API, run it object-store-native  (proposed 2026-07-01)
 
 **Decision (proposed):** Target the **Kafka API/abstraction** (append log, keyed ordering,
@@ -230,7 +273,7 @@ justifies the extra governed LLM step.
 
 ---
 
-## D1 — Who decomposes claims, and when  (proposed 2026-06-30)
+## D1 — Who decomposes claims, and when  (proposed 2026-06-30; **partially superseded by D7, 2026-07-02** — decomposition moved bus-side, provenance became mechanical, audit mitigation dropped as unnecessary)
 
 **Decision (proposed):** **Hybrid.** The producing agent **self-declares** its atomic
 claims + provenance edges (`derived_from`/`supports`/`contradicts`) as structured output
@@ -269,22 +312,15 @@ plug-in over *unmodifiable* MAS frameworks. We build the runtime, so we can make
 agent emit its own claims — getting provenance from the source instead of
 reverse-engineering it. A greenfield advantage.
 
-**Residual risk (revised 2026-07-02, red-team):** an agent could lie about provenance to
-hide an error's origin — and the original bound ("auditable log + independent content
-checks") is insufficient on its own: content is only checked for the *selectively
-verified* subset, and the selection policy (hub/centrality) is computed from the same
-self-declared edges the audited party controls. Split a hub claim into ten, or point
-edges at innocuous parents, and you stay under the verification radar; a rejected claim's
-`descendants()` then under-cuts the rewind. **Mitigations (adopted):**
-- **Sampled independent re-decomposition audits** — Grieve periodically decomposes raw
-  output bus-side (the paper's mechanism, as a spot-check) and diffs against the agent's
-  self-declared claims/edges; divergence is itself an event that lowers the agent's (or
-  graft's) trust and raises its verification rate.
-- **Conservative rewind fallback** — blast radius = `descendants(claim)` ∪ everything in
-  the lineage after the rejected claim's offset (topic 08 §3).
-- Centrality/risk-based verification selection must never be computed *solely* from
-  self-declared edges (mix in offset-order, adoption counts from handoffs, and audit
-  divergence history).
+**Residual risk (revised 2026-07-02, red-team → resolved by D7):** an agent could lie
+about provenance — and worse, the verification-selection policy (hub/centrality) was
+computed from the same self-declared edges the audited party controlled. A sampled
+re-decomposition audit was adopted as a patch, then **superseded the same day by D7**,
+which removes the root cause: decomposition happens bus-side and provenance is recorded
+mechanically by the runtime (context manifests), so the audited party no longer authors
+the graph. Kept from this revision: rewind scope uses the mechanical manifest envelope
+(not fine-grained inferred edges alone), and centrality mixes in signals the agent can't
+shape (handoff adoption counts, offset order).
 
 **Related:** [[topics/03-atomic-claim-envelope]], [[topics/07-runtime-design-resume-genealogy-handoff]]
 

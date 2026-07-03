@@ -28,7 +28,8 @@ pick up any agent. Its loop:
 2. Assemble the prompt deterministically (see §3).
 3. Call the LLM (`claude-opus-4-8`), stream output deltas back to Kafka.
 4. Execute tool calls, emit results as events.
-5. Emit atomic-claim events for its outputs; the governance projection screens them.
+5. Emit the turn's context manifest (mechanical provenance — D7); Grieve's bus-side
+   decomposer turns its output into atomic claims and the triage classifier screens them.
 6. On handoff/spawn, emit a handoff event referencing confirmed claim-ids (§5).
 
 ## 2. The event envelope (the atom)
@@ -114,7 +115,7 @@ handed **confirmed** claims only; A's unverified/rejected/quarantined claims nev
 B's trusted context. The handoff is a governance checkpoint: false-consensus can't
 propagate A→B because only screened claims cross. And when a handed claim is later
 flipped to `rejected`, you query the DAG for every agent whose work is `derived_from`
-it (∪ a conservative offset-based fallback — edges are self-declared, D1) and
+it (∪ the mechanical context-manifest envelope — D7) and
 **rewind/re-verify just those branches** — targeted multi-agent rollback, not a global
 redo. Scope honesty: rewind = compensating event + re-derive of *derived state*, never
 deletion (topic 02) — it repairs belief; external tool effects need the effect gate +
@@ -149,8 +150,10 @@ loop:
 ```
 
 ## 8. Open questions
-- **Claim decomposition owner/cost**: agent self-declares vs. a bus-side decomposer
-  (LLM pass — FActScore/NLI style per the paper). Gate by risk/hub-role to bound cost.
+- ~~Claim decomposition owner/cost~~ **decided (D7, 2026-07-02)**: bus-side decomposer +
+  mechanical context manifests; cost bounded by an always-on triage classifier
+  (FActScore/NLI style per the paper) that reserves LLM verification for
+  yellow/hub/boundary claims.
 - **What granularity crosses a handoff** — atomic claims, or claim-clusters/"findings"?
   Too fine = noisy prompt; too coarse = loses trace resolution.
 - **Governance timing** — inline screen before `confirmed` write (latency) vs. async

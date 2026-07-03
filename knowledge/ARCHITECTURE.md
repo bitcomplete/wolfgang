@@ -47,7 +47,7 @@ flowchart TB
   AGENT <-->|"content-addressed prompt cache"| LLM
 
   ANNALS[["Annals — immutable event log (Kafka)<br/>keyed by lineage_root · tiered hot to S3"]]
-  AGENT -->|"thoughts, tool calls/results,<br/>claims, handoffs"| ANNALS
+  AGENT -->|"thoughts, tool calls/results,<br/>context manifests, handoffs"| ANNALS
   ANNALS -.->|"replay → exact context"| AGENT
   ANNALS -.->|"claims + edges"| ROOT["Rootlines<br/>lineage DAG projection"]
 
@@ -65,16 +65,25 @@ deterministic replay. Handoff gives a successor a verified slice of the sender's
 
 ```mermaid
 flowchart TB
-  AGENT["Agent harness<br/>(via Graft)"] -->|"self-declared claims<br/>(land unverified)"| ANNALS[["Annals — immutable event log"]]
-  ANNALS -.->|"unverified claims<br/>(hubs · boundaries · high-risk)"| GRIEVE["Grieve<br/>verifier / governance"]
-  GRIEVE -->|"confirmed / rejected / quarantined"| ANNALS
+  AGENT["Agent harness<br/>(via Graft)"] -->|"raw output + context manifest<br/>(what was in its prompt)"| ANNALS[["Annals — immutable event log"]]
+  ANNALS -.->|"agent turns"| DEC["Grieve decomposer<br/>→ atomic claims (unverified)"]
+  DEC -->|"claims + inferred edges"| ANNALS
+  ANNALS -.->|"every claim"| CLS["triage classifier<br/>green / red / yellow · ms-cheap"]
+  CLS -->|"triage scores<br/>(red ⇒ quarantine)"| ANNALS
+  ANNALS -.->|"yellow · hubs · boundaries"| GRIEVE["Grieve verifier<br/>(LLM adjudication)"]
+  GRIEVE -->|"confirmed / rejected / quarantined<br/>(= training labels for the classifier)"| ANNALS
   ANNALS -.->|"latest trust / claim"| CONF[["confirmed<br/>projection"]]
   CONF -.->|"only confirmed crosses"| HANDOFF{{"handoff boundary"}}
 ```
 
-Grieve runs beside the bus, async: agents propose claims, Grieve disposes trust as
-separate events, and `confirmed` is the running view built from them. Rollback is a later `rejected` — a
-compensating event, never a delete.
+Grieve runs beside the bus, async. Decomposition is **bus-side** (the agent never
+authors the graph that governs it); provenance is **mechanical** — the runtime records
+which confirmed claims were in each turn's prompt, so reliance is captured un-gameably.
+An always-on classifier triages every claim in milliseconds; expensive LLM verification
+runs only on the uncertain/hub/boundary subset, and its verdicts — being events —
+accumulate into training data that periodically re-tunes the classifier (each new
+classifier version gated through Coldframe before promotion). Rollback is a later
+`rejected` — a compensating event, never a delete.
 
 ### Coldframe — evals & refinement
 
@@ -112,17 +121,17 @@ harness → re-run until it passes → keep it as a regression. Reproduction is 
 ### Grieve — verifier / governance
 - **Does** — a separate process that reads claims, screens them, and emits `trust_transition` events (`unverified` → `confirmed` / `rejected` / `quarantined`). `confirmed` is the running view built from those events.
 - **Solves** — agents can be wrong or prompt-injected, so trust must be set by something other than the agent; and a bad claim has to be actively stopped, since detecting it doesn't by itself stop it spreading.
-- **Design** — an agent can't certify its own claims, so a separate process assigns trust. It's async: claims flow immediately and an agent can use its own unverified claims as scratch, but only `confirmed` counts as shared context. Verification is selective (hub roles, handoff boundaries, high-risk claims) — and because provenance edges are self-declared, Grieve also runs sampled independent re-decomposition audits (decompose raw output bus-side, diff against the agent's declared claims; divergence lowers that agent's trust and raises its verification rate). Rollback is a compensating event, not a delete. A circuit breaker quarantines claims that keep failing. Grieve's verdicts are events too, so they're auditable — and periodically audited for verifier drift.
+- **Design** — an agent can't certify its own claims — or even decompose them: Grieve's decomposer splits raw agent output into atomic claims bus-side, and provenance comes mechanically from the runtime's per-turn context manifest, so the audited party never authors the graph the auditor samples from (D7). It's async: output flows immediately, but only `confirmed` counts as shared context. A milliseconds-cheap triage classifier screens every claim (contradictions quarantine instantly); LLM verification is reserved for the uncertain/hub/boundary subset, and its verdicts continuously re-tune the classifier (new versions gated through Coldframe). Rollback is a compensating event, not a delete. A circuit breaker quarantines claims that keep failing. Grieve's verdicts are events too, so they're auditable — and periodically audited for verifier drift.
 
 ### Agent runtime — resume + cache continuity
-- **Does** — one recoverable process per agent. Loop: rebuild context (replay the log) → build prompt (with cache breakpoints) → call the model → stream and emit events → run tools → emit claims.
+- **Does** — one recoverable process per agent. Loop: rebuild context (replay the log) → build prompt (with cache breakpoints) → call the model → stream and emit events → run tools → emit the turn's context manifest (claims are decomposed bus-side — D7).
 - **Solves** — pods get rescheduled (eviction, OOM, drain, crash), and re-prefilling a long context on a new host is slow and expensive.
 - **Design** — an agent's state is derived deterministically from its logged events, so any host rebuilds the exact same prompt bytes and can hit the model's content-addressed prompt cache — the cache is scoped to the API workspace, not to a session or host, so a new pod hits the entry the dead one wrote. Cache continuity is an opportunistic latency win, not an economic pillar: it pays off within the cache TTL (a per-agent policy set by turn cadence — 5-min default; 1h only for slow-cadence agents, since its write premium exceeds the crash-resume payout otherwise), and it's best-effort for third-party harnesses (see Graft). Snapshots bound replay cost; content-hash `event_id`s make replay idempotent; an interrupted call is re-issued on resume. A dead agent is picked up by consumer-group rebalance (small fleets) or a claim queue on the `control` topic (larger fleets), with a per-session epoch fencing out zombie producers.
 
 ### Graft — harness adapters
 - **Does** — an adapter that plugs an agent harness (Claude Code, Codex, pi.dev, Hermes, or your own) into Greenwood by translating its native loop onto the event envelope + a lifecycle protocol (`init / step / snapshot / resume / stop`). Ships as a protocol spec, per-language SDKs, a conformance suite, and reference grafts.
 - **Solves** — Greenwood shouldn't be tied to one harness; supporting a new one should mean writing an adapter, not changing the bus.
-- **Design** — the bus's only external contract is the event envelope and the lifecycle protocol, so a graft is the only per-harness code. Conformance is two-tier: correctness (resume rebuilds correct state — required) and cache-continuity (byte-identical prompt so the cache hits — best-effort; a harness that can't meet it still resumes, just paying a prefill). Grafts run as sidecar processes (gRPC) or in-process. A harness needn't be claim-aware — Greenwood can decompose claims from its raw output.
+- **Design** — the bus's only external contract is the event envelope and the lifecycle protocol, so a graft is the only per-harness code. Conformance is two-tier: correctness (resume rebuilds correct state — required) and cache-continuity (byte-identical prompt so the cache hits — best-effort; a harness that can't meet it still resumes, just paying a prefill). Grafts run as sidecar processes (gRPC) or in-process. Harnesses are never claim-aware — Greenwood decomposes claims from raw output bus-side for every harness (D7), so a graft only has to relay output and lifecycle.
 
 ### Handoff — genealogy-based
 - **Does** — an agent hands its successor a verified slice of the lineage (seed claims + their confirmed ancestors) as a short Tier-0 synthesis, expandable on demand to the underlying claims (Tier 1) and their evidence (Tier 2).

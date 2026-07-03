@@ -131,7 +131,7 @@ topic 02). Pipeline mirrors *Spark to Fire* §VI:
 - **Synchronous inline governance (per-hop latency, paper-style) vs. async
   quarantine-until-confirmed gate.** Async fits Kafka better; needs consumers to honor
   the `confirmed` topic as the trust boundary.
-- **Claim decomposition owner:** producing agent (self-declared) vs. a bus-side
-  decomposition service (trust/cost tradeoff).
+- ~~Claim decomposition owner~~ **decided (D7, 2026-07-02):** bus-side decomposer +
+  runtime context manifests + classifier triage (see decisions.md D7).
 - **Language/stack:** garden leans Rust; Kafka Streams is JVM-first (Rust needs
   rdkafka + hand-rolled stream logic, or a JVM/Kotlin streams app). Real decision.
