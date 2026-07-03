@@ -12,6 +12,7 @@
     --line:#DCE2DA; --line-2:#EAEEE8;
     --ever:#1E5B3C; --ever-2:#2E7D52; --ever-wash:#E7F0EA;
     --clay:#B4632A; --clay-2:#C67B44; --clay-wash:#F4E9DF;
+    --moss:#6E6A22; --moss-2:#8C8736; --moss-wash:#EFEDDA;
     --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
   }
@@ -32,6 +33,7 @@
   .eyebrow{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
     color:var(--ever);margin:0 0 14px}
   .clay .eyebrow{color:var(--clay)}
+  .moss .eyebrow{color:var(--moss)}
 
   .field{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;margin:0 0 12px}
   .field:last-child{margin-bottom:0}
@@ -57,18 +59,20 @@
   .ck input{width:16px;height:16px;accent-color:var(--ever)}
 
   /* results */
-  .stats{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:12px}
-  @media(max-width:520px){.stats{grid-template-columns:1fr}}
+  .stats{display:grid;grid-template-columns:1.15fr 1fr 1fr 1fr;gap:12px}
+  @media(max-width:720px){.stats{grid-template-columns:1fr 1fr}}
+  @media(max-width:420px){.stats{grid-template-columns:1fr}}
   .stat{border:1px solid var(--line);border-radius:12px;padding:15px 16px;background:var(--panel)}
   .stat.total{background:var(--ink);border-color:var(--ink)}
   .stat.cap{background:var(--ever-wash);border-color:#CFE2D6}
   .stat.evl{background:var(--clay-wash);border-color:#EAD8C7}
+  .stat.gov{background:var(--moss-wash);border-color:#DAD6B4}
   .stat .k{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
   .stat.total .k{color:#9FB4A6}
   .stat .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600;letter-spacing:-.02em;
     font-size:26px;margin-top:6px;line-height:1.05}
   .stat.total .v{color:#fff;font-size:29px}
-  .stat.cap .v{color:var(--ever)} .stat.evl .v{color:var(--clay)}
+  .stat.cap .v{color:var(--ever)} .stat.evl .v{color:var(--clay)} .stat.gov .v{color:var(--moss)}
   .stat .u{font-size:12px;color:var(--muted);font-family:var(--sans);font-weight:400}
   .stat.total .u{color:#9FB4A6}
 
@@ -90,6 +94,7 @@
   tr.sub td{font-weight:650;background:#F7F9F6;border-top:1px solid var(--line)}
   tr.evl td .bar,tr.evl.sub td{}
   tr.evl td.name .bar{background:var(--clay-wash);border-right-color:var(--clay-2)}
+  tr.gov td.name .bar{background:var(--moss-wash);border-right-color:var(--moss-2)}
   tr.grand td{font-weight:700;background:var(--ink);color:#fff}
   tr.grand td.num{color:#fff}
   .muted-row td{color:var(--muted)}
@@ -101,7 +106,7 @@
     font-size:11.5px;white-space:nowrap}
   .split{display:flex;height:10px;border-radius:6px;overflow:hidden;margin:14px 2px 0;border:1px solid var(--line)}
   .split i{display:block;height:100%}
-  .split .s-cap{background:var(--ever)} .split .s-evl{background:var(--clay)}
+  .split .s-cap{background:var(--ever)} .split .s-evl{background:var(--clay)} .split .s-gov{background:var(--moss)}
   .legend{display:flex;gap:16px;margin-top:8px;font-size:12px;color:var(--muted)}
   .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle}
   @media(prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -113,10 +118,12 @@
       <h1>Greenwood cost explorer</h1>
       <span class="sub">state capture / replay + eval inference</span>
     </div>
-    <p class="lede">Model the yearly cost of running a fleet of agents on Greenwood. The
-    log is write-heavy and rarely read, so cost splits into two very different buckets:
-    <b>storage &amp; transport</b> (what you keep) and <b>eval inference</b> (re-running
-    flows through the model). Everything below is editable — rates are US list, mid-2026.</p>
+    <p class="lede">Model the yearly cost of running a fleet of agents on Greenwood.
+    Cost splits into three very different buckets: <b>storage &amp; transport</b> (what
+    you keep — the log is write-heavy, rarely read), <b>governance inference</b> (the
+    marginal cost Greenwood adds: bus-side claim decomposition, triage, verification,
+    the handoff gate — D7), and <b>eval inference</b> (re-running flows through the
+    model). Everything below is editable — rates are US list, mid-2026.</p>
   </header>
 
   <div class="grid">
@@ -190,6 +197,39 @@
         </details>
       </section>
 
+      <section class="panel moss">
+        <p class="eyebrow">Governance (Grieve · D7)</p>
+        <div class="field"><label for="turns">Turns / agent·hour</label>
+          <input type="number" id="turns" value="50" min="0" step="5"></div>
+        <div class="field"><label for="cpt">Claims / turn</label>
+          <input type="number" id="cpt" value="5" min="0" step="1">
+          <span class="hint">atomic claims the bus-side decomposer extracts per turn</span></div>
+        <div class="field"><label for="dshare">Decomposed share (%)</label>
+          <input type="number" id="dshare" value="30" min="0" max="100" step="5">
+          <span class="hint">% of captured tokens the decomposer reads — thoughts + output; tool-result payloads excluded</span></div>
+        <div class="field"><label for="vpct">Verified % (triage yellow)</label>
+          <input type="number" id="vpct" value="2" min="0" max="100" step="0.5">
+          <span class="hint">share of claims escalated to LLM verification — the classifier-tuning loop exists to drive this down</span></div>
+        <div class="field"><label for="hpd">Handoffs / agent·day</label>
+          <input type="number" id="hpd" value="2" min="0" step="1"></div>
+        <details class="adv"><summary>Advanced rates — governance</summary>
+          <div class="field"><label for="gvIn">Decomposer in ($/M tok)</label><input type="number" id="gvIn" value="1" step="0.25">
+            <span class="hint">small/fast model — decomposition is mechanical</span></div>
+          <div class="field"><label for="gvOut">Decomposer out ($/M tok)</label><input type="number" id="gvOut" value="5" step="0.5"></div>
+          <div class="field"><label for="gvOutShare">Decomposer out / in ratio</label><input type="number" id="gvOutShare" value="0.15" min="0" step="0.05"></div>
+          <div class="field"><label for="clsRate">Classifier ($/M claims)</label><input type="number" id="clsRate" value="5" step="1">
+            <span class="hint">NLI-small GPU inference, ~ms/claim</span></div>
+          <div class="field"><label for="vfIn">Verifier in ($/M tok)</label><input type="number" id="vfIn" value="1" step="0.25">
+            <span class="hint">small judge by default; escalate hubs to a big model</span></div>
+          <div class="field"><label for="vfOut">Verifier out ($/M tok)</label><input type="number" id="vfOut" value="5" step="0.5"></div>
+          <div class="field"><label for="vin">Verify tokens in / claim</label><input type="number" id="vin" value="2000" step="250"></div>
+          <div class="field"><label for="vout">Verify tokens out / claim</label><input type="number" id="vout" value="200" step="50"></div>
+          <div class="field"><label for="gin">Gate tokens in / handoff</label><input type="number" id="gin" value="25000" step="2500">
+            <span class="hint">slice verification + Tier-0 synthesis + entailment</span></div>
+          <div class="field"><label for="gout">Gate tokens out / handoff</label><input type="number" id="gout" value="2000" step="250"></div>
+        </details>
+      </section>
+
       <section class="panel clay">
         <p class="eyebrow">Eval / refinement (Coldframe)</p>
         <div class="field"><label for="suite">Eval suite size (cases)</label>
@@ -223,12 +263,14 @@
       <div class="stats">
         <div class="stat total"><div class="k">Total / year</div><div class="v" id="oTotal">–</div></div>
         <div class="stat cap"><div class="k">State capture</div><div class="v" id="oCap">–</div><div class="u">storage + transport</div></div>
+        <div class="stat gov"><div class="k">Governance</div><div class="v" id="oGov">–</div><div class="u">decompose · triage · verify · gate</div></div>
         <div class="stat evl"><div class="k">Eval</div><div class="v" id="oEvl">–</div><div class="u">LLM inference</div></div>
       </div>
 
-      <div class="split" title="Cost split"><i class="s-cap" id="splitCap"></i><i class="s-evl" id="splitEvl"></i></div>
+      <div class="split" title="Cost split"><i class="s-cap" id="splitCap"></i><i class="s-gov" id="splitGov"></i><i class="s-evl" id="splitEvl"></i></div>
       <div class="legend">
         <span><i style="background:var(--ever)"></i><span id="legCap"></span></span>
+        <span><i style="background:var(--moss)"></i><span id="legGov"></span></span>
         <span><i style="background:var(--clay)"></i><span id="legEvl"></span></span>
       </div>
 
@@ -238,6 +280,7 @@
         <div>stored at retention <b id="oVol">–</b></div>
         <div>objects <b id="oObj">–</b></div>
         <div>compute <b id="oNodes">–</b></div>
+        <div>claims / yr <b id="oClaims">–</b></div>
         <div>eval runs / yr <b id="oRuns">–</b></div>
       </div>
 
@@ -371,6 +414,27 @@
 
     var capYr=rows.reduce(function(s,r){return s+r.yr;},0);
 
+    // governance bucket (D7) — inference that exists only because of Greenwood:
+    // bus-side decomposition, triage classifier, selective verification, handoff gate.
+    var turns=num("turns"), cpt=num("cpt"), dshare=num("dshare")/100, vpct=num("vpct")/100, hpd=num("hpd");
+    var gvIn=num("gvIn"),gvOut=num("gvOut"),gvOutShare=num("gvOutShare"),clsRate=num("clsRate"),
+        vfIn=num("vfIn"),vfOut=num("vfOut"),vin=num("vin"),vout=num("vout"),gin=num("gin"),gout=num("gout");
+    var claimsYr = A*turns*8760*cpt;
+    var decompInYr = A*tph*8760*dshare, decompOutYr = decompInYr*gvOutShare;
+    var decompYr = (decompInYr*gvIn + decompOutYr*gvOut)/1e6;
+    var triageYr = claimsYr/1e6*clsRate;
+    var verifCnt = claimsYr*vpct;
+    var verifYr  = verifCnt*(vin*vfIn+vout*vfOut)/1e6;
+    var handoffsYr = A*hpd*365;
+    var gateYr = handoffsYr*(gin*vfIn+gout*vfOut)/1e6;
+    var govRows=[
+      {name:"Decomposer — small-model pass", vol:null, yr:decompYr},
+      {name:"Triage classifier — "+count(claimsYr)+" claims", vol:null, yr:triageYr},
+      {name:"Verification — "+count(verifCnt)+" claims ("+(vpct*100)+"%)", vol:null, yr:verifYr},
+      {name:"Handoff gate — "+count(handoffsYr)+" handoffs", vol:null, yr:gateYr}
+    ];
+    var govYr=govRows.reduce(function(s,r){return s+r.yr;},0);
+
     // eval bucket — cache TTL (5min–1h) means each case's first sample per re-run
     // WRITES the prefix (1.25× input for 5-min TTL); only the other N−1 samples read.
     // Per-run context rate = amortized (write + (N−1) reads) / N.
@@ -381,14 +445,17 @@
     var evalYr=runsYr*runCost;
 
     // render stat cards
-    var total=capYr+evalYr;
+    var total=capYr+govYr+evalYr;
     $("oTotal").textContent=money(total);
     $("oCap").textContent=money(capYr);
     $("oEvl").textContent=money(evalYr);
-    var cp=total>0?capYr/total*100:50;
-    $("splitCap").style.width=cp+"%"; $("splitEvl").style.width=(100-cp)+"%";
-    $("legCap").textContent="capture "+(cp).toFixed(0)+"%";
-    $("legEvl").textContent="eval "+(100-cp).toFixed(0)+"%";
+    $("oGov").textContent=money(govYr);
+    var cp=total>0?capYr/total*100:33, gp=total>0?govYr/total*100:33;
+    $("splitCap").style.width=cp+"%"; $("splitGov").style.width=gp+"%";
+    $("splitEvl").style.width=Math.max(0,100-cp-gp)+"%";
+    $("legCap").textContent="capture "+cp.toFixed(0)+"%";
+    $("legGov").textContent="governance "+gp.toFixed(0)+"%";
+    $("legEvl").textContent="eval "+Math.max(0,100-cp-gp).toFixed(0)+"%";
 
     // readouts
     $("oTok").textContent=count(tokPerSec)+" tok/s";
@@ -396,19 +463,23 @@
     $("oVol").textContent=bytes(hotB+stdB+iaB+ (ramp<1?glaB/ramp:glaB));
     $("oObj").textContent=count(objPerSec)+"/s · "+count(objTotal)+" kept";
     $("oNodes").textContent=nodes+(nodes===1?" node · ":" nodes · ")+money(computeMo)+"/mo";
+    $("oClaims").textContent=count(claimsYr)+" ("+count(verifCnt)+" verified)";
     $("oRuns").textContent=count(runsYr)+" ("+money(runCost)+"/run)";
 
     // table
-    var maxYr=Math.max.apply(null,rows.map(function(r){return r.yr;}).concat([capYr,evalYr,1]));
-    var html="";
-    rows.forEach(function(r){
+    var maxYr=Math.max.apply(null,rows.concat(govRows).map(function(r){return r.yr;}).concat([capYr,govYr,evalYr,1]));
+    function row(r,cls){
       var w=Math.max(0,Math.min(100,r.yr/maxYr*100));
-      html+='<tr><td class="name"><div class="bar" style="width:'+w+'%"></div>'
+      return '<tr'+(cls?' class="'+cls+'"':'')+'><td class="name"><div class="bar" style="width:'+w+'%"></div>'
         +'<span>'+r.name+'</span></td>'
         +'<td class="num">'+(r.vol==null?'—':bytes(r.vol))+'</td>'
         +'<td class="num">'+money(r.yr)+'</td></tr>';
-    });
+    }
+    var html="";
+    rows.forEach(function(r){html+=row(r,'');});
     html+='<tr class="sub"><td class="name"><span>State capture — subtotal</span></td><td class="num">—</td><td class="num">'+money(capYr)+'</td></tr>';
+    govRows.forEach(function(r){html+=row(r,'gov');});
+    html+='<tr class="sub"><td class="name"><span>Governance — subtotal</span></td><td class="num">—</td><td class="num">'+money(govYr)+'</td></tr>';
     var ew=Math.max(0,Math.min(100,evalYr/maxYr*100));
     html+='<tr class="evl"><td class="name"><div class="bar" style="width:'+ew+'%"></div><span>Eval — LLM inference</span></td>'
       +'<td class="num">'+count(runsYr)+' runs</td><td class="num">'+money(evalYr)+'</td></tr>';
@@ -416,8 +487,10 @@
     $("rows").innerHTML=html;
 
     // note
-    var dom = evalYr>capYr ? "Eval inference dominates" : "Storage dominates";
-    $("note").innerHTML= "<b>"+dom+"</b> ("+money(Math.max(capYr,evalYr))+" vs "+money(Math.min(capYr,evalYr))+"). "
+    var buckets=[["Governance inference",govYr],["Storage",capYr],["Eval inference",evalYr]]
+      .sort(function(a,b){return b[1]-a[1];});
+    var dom = buckets[0][0]+" dominates";
+    $("note").innerHTML= "<b>"+dom+"</b> ("+money(buckets[0][1])+" vs "+money(buckets[1][1])+" vs "+money(buckets[2][1])+"). "
       +"Steady-state annual run-rate — year-1 is lower while the archive fills (toggle <code>Amortize year-1 ramp</code>). "
       +"S3 requests are priced (PUT on ingest, GET on every replay) but both scale with <code>segment size</code>, not event count — "
       +"batching events into MB-scale segments keeps them tiny; set the segment near 1&nbsp;KB (object-per-event) to watch them explode. "
@@ -426,8 +499,9 @@
       +"transition fees <em>are</em> modeled; not modeled (all conservative): S3 Standard volume discounts "
       +"($0.021–0.022/GB above 50&nbsp;TB), committed-use discounts, and EBS being provisioned rather than "
       +"usage-billed (size for peak + provisioned MB/s, not average bytes). "
-      +"A third bucket — governance &amp; handoff inference (claim decomposition, verification, the handoff gate) — "
-      +"is not modeled here; at fleet scale it plausibly rivals the eval bucket (see topic 11). "
+      +"Governance (D7) scales with agent activity and usually dominates: the big dials are <code>Verified&nbsp;%</code> "
+      +"(what the classifier-tuning loop drives down), <code>Decomposed share</code>, and the verifier model — "
+      +"the ROI question is whether it's paid back by avoided cascade-redo (topic 11). "
       +"Eval assumes hermetic replay (recorded tool-results as fixtures → no tool cost); "
       +(document.getElementById('cache').checked
         ?"context billed as one cache write per case per re-run + cache-reads for the other samples (amortized)."

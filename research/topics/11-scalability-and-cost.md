@@ -151,21 +151,28 @@ saved per crash-resume — so TTL is a per-agent cadence policy, 5-min default (
 
 ## Cost model — governance & handoff inference (the third bucket)
 The bucket the first two hide: inference that exists **only because of Greenwood** —
-claim decomposition (structured output on every turn), Grieve verification (an LLM step
-per verified claim), and the per-handoff gate (on-demand slice verification + Tier-0
-synthesis + entailment check, ×2 checkers for high-risk). Roughly:
+bus-side claim decomposition (a small-model pass over agent output, D7), the triage
+classifier (per-claim compute, ~ms), LLM verification on the triage-selected subset,
+and the per-handoff gate (on-demand slice verification + Tier-0 synthesis + entailment
+check, ×2 checkers for high-risk). Roughly:
 
-`gate$/handoff ≈ unverified_slice_claims·verify$ + (slice_ctx+synth_out)·rates + entail$`
+`decomp$/yr ≈ A · captured_tok/hr · decomposed_share · 8760 · small_model_rates`
+`triage$/yr ≈ claims/yr · classifier_$/claim   (GPU inference, ~ms — cheap per unit)`
 `verify$/claim ≈ (claim + evidence_ref ctx)·input_rate + verdict_out·output_rate`
+`gate$/handoff ≈ unverified_slice_claims·verify$ + (slice_ctx+synth_out)·rates + entail$`
 
-At plausible rates (a few cents per verification, dimes per handoff) this bucket scales
-with *agent activity* — unlike evals it can't be batched off-peak, and it sits in the
-handoff critical path (latency AND dollars). At fleet scale it plausibly **rivals the
-eval bucket**; decomposition overhead alone is ~5–15% extra output tokens on all agent
-traffic. **The funding-level ROI question** (record it, don't bury it): is Greenwood's
-added inference overhead paid back by avoided cascade-redo — i.e., does gated handoff +
-targeted rewind save more re-derivation inference than the governance itself costs?
-Instrument this from day one (redo-tokens avoided vs governance-tokens spent).
+This bucket is now **modeled in the interactive calculator** (`research/cost-model/`) —
+and the modeled result is stark: it scales with *agent activity* (unlike evals it can't
+be batched off-peak, and it sits in the handoff critical path), and at fleet scale it
+**dwarfs both other buckets** — the decomposer's small-model pass alone rivals total
+storage at 500 agents and dominates everything at 500k. The dials that matter, in
+order: **verified %** (the triage classifier's yellow rate — this is exactly what the
+classifier-tuning loop drives down), **decomposed share** of captured tokens, and the
+**judge model** for verification (small-model default; escalate hubs). **The
+funding-level ROI question** (record it, don't bury it): is Greenwood's added inference
+overhead paid back by avoided cascade-redo — i.e., does gated handoff + targeted rewind
+save more re-derivation inference than the governance itself costs? Instrument this
+from day one (redo-tokens avoided vs governance-tokens spent).
 
 ## Open parameters to pin down
 1. **Captured bytes/agent-second** — the driver of the storage bucket; measure the real

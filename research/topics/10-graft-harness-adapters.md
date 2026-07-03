@@ -20,9 +20,10 @@ scion onto a rootstock: harness = scion, Greenwood = rootstock, adapter = graft.
 
 ## The contract a Graft implements
 1. **Translate actions → events.** Map the harness's thoughts / tool calls / tool results
-   / outputs to Greenwood's typed events. Surface claims + provenance either from the
-   harness (if claim-aware) or via Greenwood's decomposition over raw output — so a
-   harness does **not** have to be claim-aware to be adaptable.
+   / outputs to Greenwood's typed events, plus the per-turn context manifest (what was in
+   the prompt — mechanical provenance, D7). Claims are always decomposed **bus-side** by
+   Grieve (D7), so a harness is never claim-aware; if one natively emits claims/edges,
+   the graft forwards them as untrusted *hints* only.
 2. **Lifecycle.** `init(context) → session`, `step(session) → events`,
    `apply_tool_result(session, result)`, `snapshot(session) → ref`,
    `resume(snapshot, events) → session`, `stop(session)`. This is what lets Greenwood
@@ -66,7 +67,8 @@ scion onto a rootstock: harness = scion, Greenwood = rootstock, adapter = graft.
   the snapshot is an optimization the graft may provide.
 - **Determinism knobs.** What does the SDK give an author to hit the byte-identical tier
   (canonical serialization helpers, breakpoint placement, "no wall-clock in prefix" lint)?
-- **Capability negotiation.** A graft advertises capabilities (native claims? streaming?
-  self-executes tools? cache-continuity tier?) so Greenwood adapts behavior per harness.
+- **Capability negotiation.** A graft advertises capabilities (native claim *hints*?
+  streaming? self-executes tools? cache-continuity tier?) so Greenwood adapts behavior
+  per harness (claims themselves are always bus-side — D7).
 - **Versioning.** Harness upgrades change serialization → resume across a harness-version
   bump may drop to correctness-only. Track harness version on events.
