@@ -26,8 +26,10 @@ events. No
 - **Transport, not merge engine.** The bus moves and durably logs events; it never
   decides. Trust, understanding, and coordination are derived downstream.
 - **Determinism.** Anything entering a cached LLM prefix is a pure function of the log —
-  no wall-clock, UUIDs, or host identity. This is what makes resume and cross-agent
-  handoff cache-safe.
+  no wall-clock, UUIDs, or host identity. This is what makes resume cache-safe.
+- **Messages are the only inter-agent primitive.** Agents communicate by messages (to an
+  agent or a room); nothing else crosses agents — so the message path is the one place
+  governance must stand, and the only place it eagerly runs (D8).
 - **The claim is the atom.** The unit of trust, provenance, and rollback is an *atomic
   claim* (a minimal, independently-verifiable proposition), not a whole message.
 
@@ -36,7 +38,7 @@ events. No
 Across all three: **solid arrows are event writes into the log; dotted arrows are
 derivations/reads** (projections, replay, spawns). Annals is the shared spine.
 
-### Core loop — run, persist, resume, hand off
+### Core loop — run, persist, resume, message
 
 ```mermaid
 flowchart TB
@@ -47,43 +49,49 @@ flowchart TB
   AGENT <-->|"content-addressed prompt cache"| LLM
 
   ANNALS[["Annals — immutable event log (Kafka)<br/>keyed by lineage_root · tiered hot to S3"]]
-  AGENT -->|"thoughts, tool calls/results,<br/>context manifests, handoffs"| ANNALS
+  AGENT -->|"thoughts, tool calls/results,<br/>context manifests, messages"| ANNALS
   ANNALS -.->|"replay → exact context"| AGENT
   ANNALS -.->|"claims + edges"| ROOT["Rootlines<br/>lineage DAG projection"]
 
   ANNALS -.->|"latest trust / claim"| CONF[["confirmed<br/>projection"]]
-  ROOT -.->|"ancestry"| HANDOFF{{"Handoff<br/>verified subgraph slice"}}
-  CONF -.->|"confirmed filter"| HANDOFF
-  HANDOFF -.->|"spawn w/ Tier-0 synthesis"| AGENT
+  ANNALS -.->|"messages"| SCREEN{{"per-message policy<br/>(Grieve — below)"}}
+  CONF -.->|"confirmed context"| SCREEN
+  SCREEN -.->|"screened messages<br/>(incl. spawn briefs)"| AGENT
 ```
 
 An agent calls the model, logs every action to Annals, and resumes on any host by
-deterministic replay. Handoff gives a successor a verified slice of the sender's lineage
-(the `confirmed` projection it filters against is filled by Grieve, below).
+deterministic replay. Everything inter-agent — chat, results, spawn briefs — is a
+message, and every message gets a policy ruling before delivery (the screen and the
+`confirmed` projection it consults are Grieve's, below).
 
 ### Grieve — trust & governance
 
 ```mermaid
 flowchart TB
-  AGENT["Agent harness<br/>(via Graft)"] -->|"raw output + context manifest<br/>(what was in its prompt)"| ANNALS[["Annals — immutable event log"]]
-  ANNALS -.->|"agent turns"| DEC["Grieve decomposer<br/>→ atomic claims (unverified)"]
-  DEC -->|"claims + inferred edges"| ANNALS
-  ANNALS -.->|"every claim"| CLS["triage classifier<br/>green / red / yellow · ms-cheap"]
-  CLS -->|"triage scores<br/>(red ⇒ quarantine)"| ANNALS
-  ANNALS -.->|"yellow · hubs · boundaries"| GRIEVE["Grieve verifier<br/>(LLM adjudication)"]
-  GRIEVE -->|"confirmed / rejected / quarantined<br/>(= training labels for the classifier)"| ANNALS
-  ANNALS -.->|"latest trust / claim"| CONF[["confirmed<br/>projection"]]
-  CONF -.->|"only confirmed crosses"| HANDOFF{{"handoff boundary"}}
+  A["Agent A"] -->|"Message (to agent or room)"| ANNALS[["Annals — immutable event log"]]
+  ANNALS -.->|"every message"| RULES["static rules — no ML<br/>acks/status deliver · spawn briefs +<br/>hub-bound always screen"]
+  RULES -->|"undecided"| ENC["encoder triage<br/>~ms · sampled audits of greens"]
+  ENC -->|"flagged"| DEC["decomposer → atomic claims<br/>tri-state screen vs confirmed"]
+  DEC -->|"yellow"| VER["Grieve verifier<br/>(LLM, selective)"]
+  RULES -->|"ruling = event"| ANNALS
+  VER -->|"verdicts = training labels<br/>for encoder + decomposer"| ANNALS
+  ANNALS -.->|"screened messages only"| B["Agent B's inbox<br/>(delivery projection)"]
+  DEC -->|"red: block +<br/>feedback to sender"| A
 ```
 
-Grieve runs beside the bus, async. Decomposition is **bus-side** (the agent never
-authors the graph that governs it); provenance is **mechanical** — the runtime records
-which confirmed claims were in each turn's prompt, so reliance is captured un-gameably.
-An always-on classifier triages every claim in milliseconds; expensive LLM verification
-runs only on the uncertain/hub/boundary subset, and its verdicts — being events —
-accumulate into training data that periodically re-tunes the classifier (each new
-classifier version gated through Coldframe before promotion). Rollback is a later
-`rejected` — a compensating event, never a delete.
+Agents communicate **only by messages** (to an agent or a room), and the message path is
+the only place eager governance runs — the same scope the *Spark to Fire* middleware
+measured, because cascades propagate through communication, not computation. Each message
+gets a **policy ruling** (logged as an event) from a cheapest-first cascade: static rules
+(free, no ML — typed acks deliver, spawn briefs and hub-bound messages always screen),
+then a milliseconds encoder (greens deliver, with a sampled-audit rate that makes the
+false-green rate a measured SLO), then bus-side decomposition + tri-state screening, then
+selective LLM verification. A recipient's inbox is a projection of screened messages —
+only screened content ever enters trusted context. Verifier verdicts and audit
+divergences continuously re-tune the encoder and distill the decomposer (each new model
+version gated through Coldframe). Intra-agent work is captured and manifested but never
+eagerly decomposed — the immutable log makes retroactive decomposition free for
+forensics. Rollback is a later `rejected` — a compensating event, never a delete.
 
 ### Coldframe — evals & refinement
 
@@ -109,9 +117,9 @@ harness → re-run until it passes → keep it as a regression. Reproduction is 
 - **Design** — the log is also the transport, so there's no separate messaging layer. Keying by `lineage_root` (not a random id or agent id) is what gives per-branch ordering, which correct replay depends on. `confirmed` and Rootlines are compacted views derived from the log, not separate stores of record.
 
 ### Event envelope — atomic claims
-- **Does** — each record is a typed event: `thought`, `tool_call`, `tool_result`, `claim`, `trust_transition`, `handoff`, `control`, `snapshot`, `stream_delta`. A `claim` carries provenance edges (`derived_from` / `supports` / `contradicts`), an `evidence_ref`, and a `trust_state`.
+- **Does** — each record is a typed event: `thought`, `tool_call`, `tool_result`, `claim`, `trust_transition`, `message`, `policy_decision`, `context_manifest`, `control`, `snapshot`, `stream_delta`. A `claim` carries provenance edges (`derived_from` / `supports` / `contradicts`), an `evidence_ref`, and a `trust_state`.
 - **Solves** — a message asserts several things with different truth values, so you can't verify or prune at message granularity.
-- **Design** — the claim is the smallest unit with a well-defined truth value, and the unit errors travel through (as premises). Agents declare their own claims and provenance, since only the author knows what it relied on. A `tool_result` is evidence, not a claim. Protobuf + Schema Registry for versioned schemas.
+- **Design** — the claim is the smallest unit with a well-defined truth value, and the unit errors travel through (as premises). Claims are decomposed bus-side by Grieve; provenance comes mechanically from the runtime's per-turn `context_manifest` (the runtime built the prompt, so it knows what was relied on) — agents never author the graph that governs them (D7). A `tool_result` is evidence, not a claim. Protobuf + Schema Registry for versioned schemas.
 
 ### Rootlines — lineage DAG
 - **Does** — a projection over the log: nodes are claims, edges are provenance. Answers `descendants(claim)` (what relied on a claim) and scores centrality / risk.
@@ -119,9 +127,9 @@ harness → re-run until it passes → keep it as a regression. Reproduction is 
 - **Design** — a derived read model, rebuildable by replay; kept in a stream state store (RocksDB) and/or a graph DB for edge queries. It's the structure a flat event log doesn't have.
 
 ### Grieve — verifier / governance
-- **Does** — a separate process that reads claims, screens them, and emits `trust_transition` events (`unverified` → `confirmed` / `rejected` / `quarantined`). `confirmed` is the running view built from those events.
-- **Solves** — agents can be wrong or prompt-injected, so trust must be set by something other than the agent; and a bad claim has to be actively stopped, since detecting it doesn't by itself stop it spreading.
-- **Design** — an agent can't certify its own claims — or even decompose them: Grieve's decomposer splits raw agent output into atomic claims bus-side, and provenance comes mechanically from the runtime's per-turn context manifest, so the audited party never authors the graph the auditor samples from (D7). It's async: output flows immediately, but only `confirmed` counts as shared context. A milliseconds-cheap triage classifier screens every claim (contradictions quarantine instantly); LLM verification is reserved for the uncertain/hub/boundary subset, and its verdicts continuously re-tune the classifier (new versions gated through Coldframe). Rollback is a compensating event, not a delete. A circuit breaker quarantines claims that keep failing. Grieve's verdicts are events too, so they're auditable — and periodically audited for verifier drift.
+- **Does** — rules on every inter-agent message before delivery, via a cheapest-first policy cascade: static rules (no ML) → encoder triage → decomposition + tri-state screen → selective LLM verification. Emits `policy_decision` and `trust_transition` events; `confirmed` is the running trust view.
+- **Solves** — agents can be wrong or prompt-injected, so trust must be set by something other than the agent; and a bad message has to be actively blocked, since detecting it doesn't by itself stop it spreading.
+- **Design** — governance runs on the message path only (D8): cascades propagate through communication, so that's where screening pays; intra-agent work is captured + manifested but only decomposed retroactively (the log is immutable, so forensics lose nothing). Static rules are free and deterministic — typed acks/status deliver untouched; spawn briefs and hub-bound messages always screen (hub fragility is where blast radius lives). The encoder's green-lights carry a sampled-audit rate, making the false-green rate a measured SLO. Decomposition is bus-side and provenance mechanical (D7) — the audited party never authors the graph the auditor samples from. Verifier verdicts + audit divergences continuously re-tune the encoder and distill the decomposer (new versions gated through Coldframe). Rollback is a compensating event, not a delete. A circuit breaker quarantines claims that keep failing. Grieve's rulings and verdicts are events too — auditable, and periodically audited for verifier drift.
 
 ### Agent runtime — resume + cache continuity
 - **Does** — one recoverable process per agent. Loop: rebuild context (replay the log) → build prompt (with cache breakpoints) → call the model → stream and emit events → run tools → emit the turn's context manifest (claims are decomposed bus-side — D7).
@@ -133,10 +141,10 @@ harness → re-run until it passes → keep it as a regression. Reproduction is 
 - **Solves** — Greenwood shouldn't be tied to one harness; supporting a new one should mean writing an adapter, not changing the bus.
 - **Design** — the bus's only external contract is the event envelope and the lifecycle protocol, so a graft is the only per-harness code. Conformance is two-tier: correctness (resume rebuilds correct state — required) and cache-continuity (byte-identical prompt so the cache hits — best-effort; a harness that can't meet it still resumes, just paying a prefill). Grafts run as sidecar processes (gRPC) or in-process. Harnesses are never claim-aware — Greenwood decomposes claims from raw output bus-side for every harness (D7), so a graft only has to relay output and lifecycle.
 
-### Handoff — genealogy-based
-- **Does** — an agent hands its successor a verified slice of the lineage (seed claims + their confirmed ancestors) as a short Tier-0 synthesis, expandable on demand to the underlying claims (Tier 1) and their evidence (Tier 2).
-- **Solves** — passing a raw transcript re-imports the sender's mistakes and can't be traced at the claim level.
-- **Design** — only `confirmed` claims cross, so a sender's unverified or rejected claims can't leak into the successor. Provenance edges keep the successor's work traceable to root. The Tier-0 synthesis is entailment-checked against its source claims before it crosses (it can only assert what those claims entail); expansion complements that check rather than replacing it, since the successor reads the synthesis first. The slice is verified on demand before spawn; if a handed claim is later rejected, the successor's branch is rewound. Caching isn't a goal here (a fresh successor starts cold), but the synthesis is still logged — for provenance and the successor's own later resume.
+### Messaging — the inter-agent primitive
+- **Does** — agents communicate by `message` events, addressed to an agent or a room; a recipient's inbox is a projection of messages whose policy ruling permits delivery. Spawning a sub-agent is just a message (`SPAWN_BRIEF`) plus a `spawn` control event.
+- **Solves** — every inter-agent channel is also a cascade channel, so there must be exactly one kind of crossing, with governance standing on it. (Handoff, the old primitive, dissolved into this: a spawn is a message; a successor-after-death is a resume.)
+- **Design** — messages ride the same log as everything else (no separate messaging layer); rooms are an addressing convention, not a broker feature. Blocked messages return to the sender as a feedback package. The **spawn-brief pattern** keeps D2's machinery as a library: compose the brief from the confirmed provenance subgraph, entailment-check the Tier-0 synthesis against its source claims before it crosses (the check is a stochastic filter with a monitored false-pass rate; two independent checkers for high-risk spawns), lazy-expand to claims (Tier 1) and evidence (Tier 2) on demand. Static policy routes every spawn brief to full screening, so the old boundary gate falls out of ordinary message governance rather than existing as a separate mechanism. If a delivered claim is later rejected, recipients' branches are rewound (belief repair + compensation — see below).
 
 ### Coldframe — eval / refinement
 - **Does** — human feedback and Grieve's rejections are events. An eval builder freezes the flagged context (an event range) and derives an assertion; a runner replays it and checks the assertion; failures drive harness changes until it passes; the passing case is kept as a regression.
@@ -149,7 +157,8 @@ The four big capabilities are the same idea at different scopes — reconstruct 
 replaying the log:
 
 - **Resume** — replay an agent's own history to rebuild its exact context.
-- **Handoff** — give a successor a verified slice of that history.
+- **Messaging** — deliver only screened slices of history across agents (a spawn brief is
+  the curated case of this).
 - **Rollback** — append a corrective event; downstream *derived state* re-derives, nothing
   is deleted. Scope honesty: this repairs **belief**, not the world — external tool
   effects don't rewind. Reversible effects run registered compensation handlers (as
@@ -159,16 +168,17 @@ replaying the log:
 - **Eval** — replay a saved slice of history to reproduce a past run.
 
 Because they share that one move, they share one implementation. Rootlines carries all of
-it: the resume substrate, the handoff payload, the audit graph, and the index evals target.
+it: the resume substrate, the message-slice source, the audit graph, and the index evals target.
 
 ## Cost
 
 Three buckets, very different in character: **state capture / replay** (storage +
 transport — cheap; low tens of $k/yr for 500 agents on an object-store-native engine),
 **eval inference** (re-running flows through the model — large at any real regression
-cadence), and **governance & handoff inference** (claim decomposition, verification, and
-the per-handoff gate — the marginal cost Greenwood itself adds, plausibly rivaling evals;
-the real ROI question is whether it's paid back by avoided cascade-redo).
+cadence), and **governance inference** (the per-message policy cascade — the marginal
+cost Greenwood itself adds; it scales with communication, not computation, so topology
+is a cost dial, and the real ROI question is whether it's paid back by avoided
+cascade-redo).
 Full model and the 500-agent-year worked estimate:
 [`research/topics/11-scalability-and-cost.md`](../research/topics/11-scalability-and-cost.md).
 
@@ -184,6 +194,7 @@ floored at an HA minimum), so it holds flat at small scale and grows with load:
 
 Rationale, alternatives, and trade-offs for every choice above are in
 [`research/decisions.md`](../research/decisions.md) (**P0** event sourcing; **D1**
-claims/verifier; **D2** handoff; **D3** async governance; **D4** evals). Component names
+claims/verifier; **D2** spawn briefs; **D3** async governance; **D4** evals; **D7** bus-side
+decomposition; **D8** messaging + per-message policy). Component names
 and their reasoning: [`research/NAMES.md`](../research/NAMES.md). The buildable spec
 (envelope, topics, projections, protocols): [`research/topics/08-concrete-spec.md`](../research/topics/08-concrete-spec.md).

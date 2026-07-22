@@ -74,6 +74,14 @@ call at crash → re-issue (prefix cached, generation redone); stream deltas int
 to salvage partials. `event_id` = content hash → replay never double-emits.
 
 ## 5. Genealogy handoff (across agents) — the new part
+
+> **Revised by D8 (2026-07-02):** handoff is no longer a bus primitive — agents
+> communicate by **messages** (to an agent or room), and governance is a per-message
+> policy cascade (static rules → encoder → decompose/screen → verify). Everything below
+> survives as the **spawn-brief message pattern**: how to *compose* a good
+> `Message{SPAWN_BRIEF}` from the confirmed lineage. The "boundary gate" is now just
+> static policy routing every spawn brief to full screening. See decisions.md D8 and
+> topic 08 §5.
 When agent A hands work to B (delegate, spawn sub-agent, navigator→implementer):
 
 **A does NOT dump its transcript into B.** Instead:

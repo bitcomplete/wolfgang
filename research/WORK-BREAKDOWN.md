@@ -7,7 +7,7 @@ sources: [decisions, topics-05-08]
 created: 2026-06-30
 updated: 2026-06-30
 status: draft — the SOURCE for Linear ticket creation (do NOT create in Linear until Terra authorizes)
-summary: The Greenwood design decomposed into buildable units. 10 projects, 6 sequencing milestones, ~40 implementation-ready tickets. Each ticket has Why/Scope/Acceptance/Deps/Refs so it can become a Linear issue verbatim. Critical path: single-agent MVP → claims+governance → multi-agent handoff → eval + adapters → hardening.
+summary: The Greenwood design decomposed into buildable units. 10 projects, 6 sequencing milestones, ~40 implementation-ready tickets. Each ticket has Why/Scope/Acceptance/Deps/Refs so it can become a Linear issue verbatim. Critical path: single-agent MVP → claims+governance → messaging + per-message governance → eval + adapters → hardening.
 ---
 
 # Greenwood — Work Breakdown
@@ -27,8 +27,9 @@ Terra confirms the exact structure before creation.
   resume. (P1, P2, P3)
 - **M2 — Claims + governance.** Bus-side decomposer + context manifests (D7); verifier confirms; confirmed
   + lineage projections. Proves: event-sourced trust. (P4, P5)
-- **M3 — Multi-agent handoff.** Genealogy handoff, boundary gate, rewind. Proves the
-  differentiator: traceable, error-gated handoff. (P6, P7)
+- **M3 — Messaging + per-message governance.** Message primitive, static policy engine,
+  per-message screen, spawn-brief pattern, rewind. Proves the differentiator: traceable,
+  screened inter-agent communication (D8). (P6, P7)
 - **M4 — Agent eval & refinement.** Feedback events → auto-built replay evals →
   reproduce → tweak-harness → iterate → regression suite. Depends on M1 (replay) + M2
   (governance/lineage); can start once those land, before/alongside M3. (P9)
@@ -127,7 +128,7 @@ Refs: `topics/03`, `topics/01`, `topics/08` §1/§3/§4, D-log D1/D7.
   rewind scope = descendants ∪ manifest envelope. Acceptance: DAG rebuildable from
   replay; descendants query returns the rollback blast radius. Deps: T4.1.
 - **T4.3 — Claim tagging + deterministic grouping.** Scope: tags for topic/module;
-  deterministic grouping (by tag/shared-ancestor) for handoff rendering — NO LLM
+  deterministic grouping (by tag/shared-ancestor) for spawn-brief rendering — NO LLM
   summarization here. Acceptance: grouping is a pure function of claims+edges. Deps: T4.1.
 
 ## P5 — Governance / verifier  · M2
@@ -157,33 +158,43 @@ Refs: `topics/02`, `topics/08` §4, D-log D1/D3/P0, `spark-to-fire` review.
   Acceptance: triage latency in ms not seconds; a planted contradiction is quarantined
   without an LLM call; a fine-tuned version must beat the incumbent on the Coldframe
   suite to promote. Deps: T5.1, T4.1, P9.
-- **T5.6 — Effect gate.** Why: trust must govern actions, not just handoffs (topic 08
+- **T5.6 — Effect gate.** Why: trust must govern actions, not just messages (topic 08
   §5a). Scope: tool registry declares `effect_class` per tool; runtime blocks
   IRREVERSIBLE tool calls whose premise claims aren't confirmed (or escalates to human);
   REVERSIBLE requires a registered compensation handler. Acceptance: an unverified-premise
   irreversible call is held pending verification; a reversible one runs and its
   compensation is invoked on branch rewind. Deps: T5.1, T2.3.
 
-## P6 — Multi-agent handoff (the differentiator)  · M3
-Refs: `topics/07` §5, `topics/08` §5, D-log D2/D3.
+## P6 — Messaging + per-message governance (the differentiator)  · M3
+Refs: `topics/07` §5, `topics/08` §4–5, D-log D2/D3/D8.
 
-- **T6.1 — Handoff event + confirmed subgraph selection.** Scope: `Handoff` event; runtime
-  computes confirmed provenance subgraph (seeds + depth-bounded ancestors). Acceptance:
-  subgraph is confirmed-only, deterministic, depth-bounded. Deps: T4.2, T5.2.
-- **T6.2 — Boundary gate (D3).** Scope: on-demand verify unverified slice claims; await
-  their trust-transitions before spawn. Acceptance: no unconfirmed claim crosses the
-  boundary; local await, not global block. Deps: T6.1, T5.3.
-- **T6.3 — Tier-0 verified synthesis.** Scope: LLM synthesis of the slice as a `Claim`
-  (`derived_from` the slice), entail-checked against sources; logged as an event.
-  Acceptance: synthesis asserts only what the slice entails (injected hallucination →
-  rejected); logged + provenance-linked. Deps: T6.1, T5.1.
-- **T6.4 — Lazy expansion (Tiers 1/2).** Scope: B expands synthesis → claims → evidence on
-  demand. Acceptance: B can drill from briefing to underlying confirmed claims to evidence.
-  Deps: T6.3, T4.2.
-- **T6.5 — Rewind on rejection.** Scope: when a handed claim flips `REJECTED`, find
-  `descendants` and emit `Control{REWIND}` on affected branches; re-derive. Acceptance:
-  a post-hoc rejection surgically rewinds only affected branches, via compensating events
-  (no deletion). Deps: T6.1, T4.2, T7.1.
+- **T6.1 — Message primitive + delivery projection.** Scope: `Message` event (to:
+  agent|room; typed: CHAT/SPAWN_BRIEF/RESULT/ACK/STATUS/TOOL_FORWARD); recipient inbox =
+  fold of messages whose `PolicyDecision` permits delivery; rooms as addressing
+  convention. Acceptance: a message reaches its recipient only via the delivery
+  projection; blocked messages return a feedback package to the sender. Deps: T1.3, T5.2.
+- **T6.2 — Static policy engine (no ML).** Scope: declarative rule config matched on
+  msg_type/sender/recipient attributes → DELIVER/SCREEN/VERIFY; policy config versioned
+  as events; every ruling logged as `PolicyDecision`. Defaults: ACK/STATUS/TOOL_FORWARD
+  deliver; SPAWN_BRIEF + hub-bound screen; effect-gate premises verify. Acceptance:
+  rulings are deterministic, replayable, and auditable; a policy change is an event.
+  Deps: T6.1.
+- **T6.3 — Per-message screen (encoder → decompose → verify).** Scope: wire the Grieve
+  cascade (T5.5 encoder, T4.1 decomposer, T5.1 verifier) onto messages the static rules
+  don't decide; sampled audits of green-lit messages; offset-aligned reads of
+  confirmed + lineage. Acceptance: a planted false claim in a message is blocked with
+  feedback; sampled-audit rate is enforced and measured (false-green SLO). Deps: T6.2,
+  T5.5, T4.1, T5.1.
+- **T6.4 — Spawn-brief pattern library (D2-as-pattern).** Scope: compose
+  `Message{SPAWN_BRIEF}` from the confirmed provenance subgraph (seeds + depth-bounded
+  ancestors) → Tier-0 synthesis entail-checked against sources → lazy expansion (Tiers
+  1/2) on demand. Acceptance: brief asserts only what the slice entails (injected
+  hallucination → blocked at screen); B can drill briefing → claims → evidence. Deps:
+  T6.1, T4.2, T5.1.
+- **T6.5 — Rewind on rejection.** Scope: when a delivered claim flips `REJECTED`, scope
+  rewind by recipient set (from manifests) ∪ `descendants`; emit `Control{REWIND}`;
+  re-derive. Acceptance: a post-hoc rejection rewinds only affected branches, via
+  compensating events (no deletion). Deps: T6.1, T4.2, T7.1.
 
 ## P7 — Lifecycle & control  · M3
 Refs: `topics/04`, `topics/08` §1(Control), D-log P0.
@@ -192,7 +203,7 @@ Refs: `topics/04`, `topics/08` §1(Control), D-log P0.
   events on `agent-bus.control`; agent-trajectory tree projection (Gardener-style
   Fork/Rewind/Promote/Abandon). Acceptance: lifecycle transitions are events; tree
   rebuildable by replay. Deps: T1.3.
-- **T7.2 — Swarm / fan-out.** Scope: one parent spawns N siblings sharing a handoff slice;
+- **T7.2 — Swarm / fan-out.** Scope: one parent spawns N siblings sharing a spawn-brief slice;
   concurrency control. Acceptance: N implementers run in parallel off one slice. Deps:
   T6.3, T7.1.
 - **T7.3 — Failure recovery (crash detection).** Scope: detect crashed/timed-out agents
@@ -261,9 +272,9 @@ Refs: `topics/10-graft-harness-adapters.md`, `topics/08-concrete-spec.md`, D-log
   helpers (canonical serialization, breakpoint placement, "no wall-clock in prefix"
   lint). Acceptance: a reference graft built on it passes conformance. Deps: T10.1, T1.3.
 - **T10.3 — Conformance suite.**
-  Why: pass it → resume/handoff/evals work with no per-harness special-casing. Scope:
+  Why: pass it → resume/messaging/evals work with no per-harness special-casing. Scope:
   event-mapping round-trip; correct-state resume; byte-identical resume (cache-continuity
-  tier); handoff injection; capability honesty. Acceptance: reports per-tier pass/fail for
+  tier); message + spawn-brief injection; capability honesty. Acceptance: reports per-tier pass/fail for
   a graft. Deps: T10.2, T3.2.
 - **T10.4 — Reference graft: Claude Code.** Deps: T10.2, T10.3.
 - **T10.5 — Reference graft: Codex.** Deps: T10.2, T10.3.

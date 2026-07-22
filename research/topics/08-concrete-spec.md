@@ -1,19 +1,20 @@
 ---
 doc_type: technical-spec
-topic: Greenwood concrete spec — event envelope, Kafka topics, projections/folds, verifier, handoff protocol
+topic: Greenwood concrete spec — event envelope, Kafka topics, projections/folds, Grieve policy cascade, messaging
 project: Greenwood
-tags: [spec, protobuf, envelope, kafka, topics, partitioning, projection, fold, verifier, handoff, control, buildable]
+tags: [spec, protobuf, envelope, kafka, topics, partitioning, projection, fold, verifier, messaging, policy, control, buildable]
 sources: [decisions, topics-01-07, claude-api-skill, spark-to-fire]
 created: 2026-06-30
 updated: 2026-06-30
 status: draft — the buildable layer; tickets reference this
-summary: The concrete artifacts an implementer needs — the Protobuf event envelope + payload variants, the Kafka topic/partition layout, the fold rules for the confirmed/lineage/agent-state projections, the verifier contract, and the handoff protocol + boundary gate. Encodes P0/D1/D2/D3.
+summary: The concrete artifacts an implementer needs — the Protobuf event envelope + payload variants, the Kafka topic/partition layout, the fold rules for the confirmed/lineage/agent-state projections, the Grieve per-message policy cascade, and messaging/delivery + the spawn-message pattern. Encodes P0/D1/D2/D3/D7/D8.
 ---
 
 # Greenwood — concrete spec (buildable layer)
 
 Encodes the decisions log (P0 event-sourcing-everywhere; D1 agent-proposes/verifier-
-confirms; D2 graduated handoff; D3 async-with-boundary-gate). This is the layer tickets
+confirms; D2 graduated tiering (now the spawn-message pattern); D3 async gating, applied
+per message; D7 bus-side decomposition; D8 messaging + per-message policy). This is the layer tickets
 point at. Protobuf shapes are illustrative (names/field-numbers TBD in the schema ticket).
 
 ## 1. Event envelope (Protobuf + Schema Registry)
@@ -32,13 +33,29 @@ message Event {
     ToolResult       tool_result      = 12;   // = EVIDENCE, not a claim (topic 03)
     Claim            claim            = 13;
     TrustTransition  trust_transition = 14;
-    Handoff          handoff          = 15;
+    Handoff          handoff          = 15;   // legacy alias — new code uses Message{SPAWN_BRIEF} (D8)
     StreamDelta      stream_delta     = 16;
     Snapshot         snapshot         = 17;
     Control          control          = 18;
     ContextManifest  context_manifest = 19;   // D7: mechanical provenance
     TriageScore      triage_score     = 20;   // D7: classifier screen
+    Message          message          = 21;   // D8: the ONLY inter-agent primitive
+    PolicyDecision   policy_decision  = 22;   // D8: per-message governance ruling
   }
+}
+message Message {                     // D8: agents communicate ONLY by messages
+  string msg_id = 1;
+  string to = 2;                      // agent_session_id or room id
+  enum MsgType { CHAT=0; SPAWN_BRIEF=1; RESULT=2; ACK=3; STATUS=4; TOOL_FORWARD=5; } MsgType msg_type = 6;
+  string body = 3;
+  repeated string refs = 4;           // claim/evidence ids referenced
+  string in_reply_to = 5;
+}
+message PolicyDecision {              // D8: every governance ruling is an event (P0)
+  string msg_id = 1;
+  enum Route { DELIVER=0; SCREEN=1; VERIFY=2; BLOCK=3; SAMPLED_AUDIT=4; } Route route = 2;
+  string rule_id = 3;                 // static rule that matched, or "encoder"
+  string policy_version = 4;          // static policy config is versioned via events
 }
 message Claim {                       // D7: emitted by the BUS-SIDE DECOMPOSER, lands unverified
   string claim_id = 1;
@@ -48,7 +65,7 @@ message Claim {                       // D7: emitted by the BUS-SIDE DECOMPOSER,
   repeated string derived_from = 5;   // inferred by the decomposer + turn's ContextManifest (D7)
   repeated string supports = 6;
   repeated string contradicts = 7;
-  repeated string tags = 8;           // for deterministic grouping in handoff (D2)
+  repeated string tags = 8;           // for deterministic grouping in spawn briefs (D2 pattern)
   string source_turn_id = 9;
   repeated string agent_hint_edges = 10; // optional agent-declared edges — untrusted hints only
 }
@@ -70,7 +87,7 @@ message TrustTransition {             // D1: emitted by the VERIFIER; P0: trust 
   string rationale_ref = 5;
   float  risk_score = 6;              // spectral/hub signal (Spark-to-Fire)
 }
-message Handoff {                     // D2/D3
+message Handoff {                     // D2/D3 — superseded by Message{SPAWN_BRIEF} (D8); kept for schema history
   string from_agent = 1; string to_agent = 2;
   string task_spec = 3;
   repeated string seed_claim_ids = 4; // A's selected conclusion claims
@@ -142,7 +159,7 @@ runtime from `confirmed`.
 ## 3. Fold rules (projections are derived state — P0)
 - **confirmed[claim_id]** = the `Claim` with `trust_state` = `to_state` of its latest
   `TrustTransition` (by partition order). `REJECTED`/`QUARANTINED` ⇒ excluded from any
-  trusted context / handoff slice.
+  trusted context / spawn-brief slice.
 - **lineage DAG** = nodes: claims; edges: `derived_from`/`supports`/`contradicts`
   (decomposer-inferred) + the turn-level **ContextManifest** edges (mechanical — D7).
   Key query: `descendants(claim_id)` = rollback blast radius (who relied on X). Rewind
@@ -153,20 +170,30 @@ runtime from `confirmed`.
   `Snapshot.offset` forward → the messages array (topic 06). Must be a **pure function
   of the log** (canonical serialization; no ts/uuid/pod-id in the cached prefix).
 
-## 4. Grieve pipeline (separate process — D1/D7, topic 02)
-- **Decomposer (D7):** consumes agent output from `raw`, splits it into atomic `Claim`s
-  (FActScore-style; small/cheap model), inferring `derived_from` edges from content +
-  the turn's `ContextManifest`. Agents don't decompose their own output.
-- **Classifier triage (D7):** an always-on NLI-style classifier (paper precedent:
-  DeBERTa-v3-small) screens every claim against the confirmed context in milliseconds →
-  `TriageScore{GREEN|RED|YELLOW}`. RED ⇒ quarantine immediately; GREEN ⇒ low verification
-  priority; YELLOW ⇒ the LLM verification queue. **Tuning loop:** `TrustTransition`
-  verdicts are accumulating labeled data — periodically fine-tune the classifier on
-  them; every new classifier version is gated through Coldframe (D4) before promotion,
-  like any harness change. Trust states are still assigned only by the verifier — the
-  classifier prioritizes, it never confirms.
-- **Verifier:** selects from the triage output by **policy** (Balanced: yellow + hub-role,
-  at handoff boundaries, high-risk). Others stay `UNVERIFIED`.
+## 4. Grieve pipeline (separate process — D1/D7/D8, topic 02)
+Governance runs **on the message path only** (D8), as a per-message policy cascade —
+cheapest stage first; every ruling logged as a `PolicyDecision` event:
+1. **Static rules (no ML, free).** Declarative config matched on `msg_type` + attributes:
+   `ACK`/`STATUS`/`TOOL_FORWARD` → DELIVER untouched; `SPAWN_BRIEF` and anything
+   addressed to a **hub role** → SCREEN always; effect-gate premises → VERIFY always.
+   Policy config changes are events (versioned, auditable, replayable).
+2. **Encoder triage** (self-hosted NLI-small, ~ms, ~$0.02/M tok) for messages the rules
+   don't decide: green → DELIVER, with a **sampled-audit** rate (greens occasionally
+   decomposed anyway) so the false-green rate is a measured SLO; else →
+3. **Decomposer (D7, message-scoped):** splits the message into atomic `Claim`s
+   (FActScore-style; small/cheap model), inferring `derived_from` from content + the
+   sender's `ContextManifest`; claims screened tri-state against confirmed context →
+   `TriageScore{GREEN|RED|YELLOW}`. RED ⇒ **block + feedback package** to sender;
+   YELLOW →
+4. **Verifier (LLM, selective):** the paper's Balanced policy. Others stay `UNVERIFIED`
+   (excluded from trusted context, never forwarded-with-tag).
+
+**Tuning loop (D7, unchanged):** `TrustTransition` verdicts + sampled-audit divergences
+are accumulating labeled data — periodically fine-tune the encoder (and distill the
+decomposer) on them; every new model version is gated through Coldframe (D4) before
+promotion, like any harness change. Trust states are still assigned only by the
+verifier. Intra-agent traffic is never eagerly decomposed; `raw` is immutable, so
+**retroactive decomposition** (the paper's offline mode) covers forensics.
 - **Factuality** check: against `evidence_ref` / tools / world.
 - **Faithfulness** check: entailment against the evidence bundle the producer was given
   (unsupported/contradictory ⇒ `REJECTED`).
@@ -175,31 +202,36 @@ runtime from `confirmed`.
   tagged, excluded from trusted context).
 - The verifier is itself an LLM step → its verdicts are auditable events (P0 "back up").
 
-## 5. Handoff protocol (D2 + D3 boundary gate)
-1. A emits `Handoff{seed_claim_ids, task_spec}`.
-2. Runtime computes the **confirmed provenance subgraph**: seeds + supporting ancestors
-   (`derived_from`, depth-bounded), confirmed-only. **Boundary gate (D3):** trigger
-   on-demand verification of any unverified slice claims; await their trust-transitions.
-   Unresolved claims are **excluded** — never forwarded with a risk tag (an LLM reading
-   the briefing won't reliably discount a tag). Gate reads are **offset-aligned**: wait
-   until `confirmed` and the lineage projection have both passed the handoff event's
-   offset, else the gate can see a claim CONFIRMED whose ancestry edges haven't landed.
-3. Produce **Tier-0 synthesis**: a `Claim` (`derived_from` = the slice) — a verified LLM
-   briefing (entail-checked against the slice; no new/distorted assertions). Logged as an
-   event (for provenance + B's own resume — D2). The entailment check is itself an LLM
-   judgment — a stochastic filter with a monitored false-pass rate, not a hard gate; run
-   two independent checkers for high-risk handoffs.
-4. Spawn B (`Control{SPAWN}`). B's prompt = [B-role system] + [Tier-0 synthesis] +
-   [task]. Tiers 1/2 (claims, evidence) available via **lazy expansion** on demand.
-5. If a slice claim later flips `REJECTED`, emit `Control{REWIND, target=B-branch}`:
-   B's derived context is repaired and its descendants quarantined — **belief repair**.
-   B's *external* effects don't rewind: REVERSIBLE effects run their registered
-   compensation handlers (as events); IRREVERSIBLE ones are surfaced for human
-   remediation. Continuing B is stochastic *regeneration* at inference cost, not a
-   deterministic re-fold.
+## 5. Messaging & delivery (D8 — replaces the handoff protocol)
+1. A emits `Message{to, msg_type, body, refs}` — to an agent or a room. Messages ride
+   `raw` like every event (keyed by `lineage_root`; a room is a lineage-ish addressing
+   convention, not a broker feature).
+2. The **Grieve cascade (§4)** rules on it: DELIVER / SCREEN / VERIFY / BLOCK, logged as
+   a `PolicyDecision`. Screen-stage reads are **offset-aligned**: wait until `confirmed`
+   and the lineage projection have both passed the message's offset, else the screen can
+   see a claim CONFIRMED whose ancestry edges haven't landed.
+3. **Delivery = projection**: a recipient's inbox is a fold of messages whose ruling
+   permits delivery. An agent's trusted context only ever accumulates screened content —
+   D3's guarantee, message-by-message. Blocked messages return to the sender as a
+   feedback package (rejected claims + conflict evidence + rewrite directive).
+4. If a delivered claim later flips `REJECTED`, emit `Control{REWIND}` scoped by the
+   recipient set (who consumed it — mechanical, from manifests): belief repair +
+   quarantined descendants; REVERSIBLE external effects run registered compensation,
+   IRREVERSIBLE ones surface for human remediation. Re-running a branch is stochastic
+   regeneration at inference cost, not a deterministic re-fold.
 
-## 5a. Effect gate (symmetric to the handoff gate)
-Trust must govern **actions**, not just handoffs: before executing a `ToolCall` with
+**The spawn-message pattern (formerly "handoff" — D2's machinery as a library):**
+compose `Message{msg_type: SPAWN_BRIEF}` from the confirmed provenance subgraph (seeds +
+ancestors, depth-bounded, confirmed-only) → **Tier-0 synthesis** (a `Claim`,
+`derived_from` the slice, entail-checked against it — the entailment check is a
+stochastic filter with a monitored false-pass rate; run two independent checkers for
+high-risk spawns) → `Control{SPAWN}`; B's prompt = [B-role system] + [brief] + [task],
+Tiers 1/2 via lazy expansion. Static policy routes every `SPAWN_BRIEF` to SCREEN, so the
+old boundary gate falls out of the ordinary message path rather than existing as a
+separate mechanism.
+
+## 5a. Effect gate (symmetric to the message screen)
+Trust must govern **actions**, not just messages: before executing a `ToolCall` with
 `effect_class = IRREVERSIBLE`, the runtime requires the claims it's premised on (the
 turn's `ContextManifest` set — mechanical, D7) to be **confirmed** — or escalates for
 human approval. `REVERSIBLE` requires a registered `compensation_ref`. `PURE`/`IDEMPOTENT`
@@ -210,7 +242,7 @@ unverified branch act on the world, the less "rewind" can ever mean.
 consume(raw@lineage_root) → fold state → assemble prompt (cache_control bps) →
 LLM (opus-4-8, ttl per cadence policy) → emit stream_deltas → exec tools (effect gate §5a) → emit tool_results →
 emit ContextManifest (D7; the decomposer + triage classifier run bus-side, not in the
-agent loop) → on handoff run §5 → snapshot every N → commit.
+agent loop) → send/receive Messages via the delivery projection (§5) → snapshot every N → commit.
 
 ## 7. Cross-cutting (garden's unsolved ops problems — design targets)
 Exec/tool sandboxing; rate limiting (runaway agents); cost control (per-agent token

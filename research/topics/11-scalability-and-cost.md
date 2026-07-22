@@ -149,30 +149,34 @@ Related TTL economics for the *runtime* (not evals): a blanket `ttl:"1h"` policy
 $3.75/M premium on every net-new prefix token ≈ **$2.25/agent·hr always-on**, vs ≈ $0.90
 saved per crash-resume — so TTL is a per-agent cadence policy, 5-min default (topic 06).
 
-## Cost model — governance & handoff inference (the third bucket)
-The bucket the first two hide: inference that exists **only because of Greenwood** —
-bus-side claim decomposition (a small-model pass over agent output, D7), the triage
-classifier (per-claim compute, ~ms), LLM verification on the triage-selected subset,
-and the per-handoff gate (on-demand slice verification + Tier-0 synthesis + entailment
-check, ×2 checkers for high-risk). Roughly:
+## Cost model — governance inference (the third bucket)
+The bucket the first two hide: inference that exists **only because of Greenwood**.
+**D8 re-scoped it to the message path** — governance scales with *communication, not
+computation* (D7's decompose-everything scaled with all captured tokens and priced out
+at ~$1.4B/yr at 500k agents; message-scoping cut it ~60×). Per message, a cheapest-first
+cascade: static rules (free, no ML) → encoder triage (~$0.02/M tok self-hosted) →
+decomposition + tri-state screen (small model, only on screened messages) → LLM
+verification (only on yellow claims):
 
-`decomp$/yr ≈ A · captured_tok/hr · decomposed_share · 8760 · small_model_rates`
-`triage$/yr ≈ claims/yr · classifier_$/claim   (GPU inference, ~ms — cheap per unit)`
-`verify$/claim ≈ (claim + evidence_ref ctx)·input_rate + verdict_out·output_rate`
-`gate$/handoff ≈ unverified_slice_claims·verify$ + (slice_ctx+synth_out)·rates + entail$`
+`msg_tok/yr = A · msgs/agent·hr · tok/msg · 8760`
+`encoder$/yr ≈ msg_tok/yr · encoder_rate            (reads all messages)`
+`decomp$/yr ≈ msg_tok/yr · screened_share · small_model_rates`
+`verify$/claim ≈ (claim + evidence ctx)·input_rate + verdict_out·output_rate`
 
-This bucket is now **modeled in the interactive calculator** (`research/cost-model/`) —
-and the modeled result is stark: it scales with *agent activity* (unlike evals it can't
-be batched off-peak, and it sits in the handoff critical path), and at fleet scale it
-**dwarfs both other buckets** — the decomposer's small-model pass alone rivals total
-storage at 500 agents and dominates everything at 500k. The dials that matter, in
-order: **verified %** (the triage classifier's yellow rate — this is exactly what the
-classifier-tuning loop drives down), **decomposed share** of captured tokens, and the
-**judge model** for verification (small-model default; escalate hubs). **The
+Modeled in the interactive calculator (`research/cost-model/`) with **topology presets**
+— message rate is a *topology choice*, the widest-variance parameter in the model
+(orchestrator ~1–2 msgs/agent·hr · mixed ~10 · peer-swarm ~50+), so the cost model
+doubles as a topology-design signal: chatty topologies buy more cascade risk *and* pay
+for its screening. At mixed defaults (10 msgs/hr, 1k tok/msg, ~25% screened, 2%
+verified): **~$22M/yr at 500k agents / ~$22k/yr at 500 agents** — ~0.1% overhead on
+runtime inference. Dials, in order: **messages/agent·hr** (topology), **screened %**
+(static rules + encoder green rate — what the tuning flywheel drives down), **verified
+%**, and the decomposer model (distill → self-hosted for another 5–20×). **The
 funding-level ROI question** (record it, don't bury it): is Greenwood's added inference
-overhead paid back by avoided cascade-redo — i.e., does gated handoff + targeted rewind
-save more re-derivation inference than the governance itself costs? Instrument this
-from day one (redo-tokens avoided vs governance-tokens spent).
+overhead paid back by avoided cascade-redo — i.e., does screened messaging + targeted
+rewind save more re-derivation inference than the governance itself costs? Instrument
+this from day one (redo-tokens avoided vs governance-tokens spent). **Measure real
+message rates per topology** — top open parameter alongside captured bytes/agent·s.
 
 ## Open parameters to pin down
 1. **Captured bytes/agent-second** — the driver of the storage bucket; measure the real

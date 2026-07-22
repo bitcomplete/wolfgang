@@ -116,14 +116,15 @@
   <header class="top">
     <div class="brand">
       <h1>Greenwood cost explorer</h1>
-      <span class="sub">state capture / replay + eval inference</span>
+      <span class="sub">storage + governance + eval inference</span>
     </div>
     <p class="lede">Model the yearly cost of running a fleet of agents on Greenwood.
     Cost splits into three very different buckets: <b>storage &amp; transport</b> (what
     you keep — the log is write-heavy, rarely read), <b>governance inference</b> (the
-    marginal cost Greenwood adds: bus-side claim decomposition, triage, verification,
-    the handoff gate — D7), and <b>eval inference</b> (re-running flows through the
-    model). Everything below is editable — rates are US list, mid-2026.</p>
+    marginal cost Greenwood adds — a per-<i>message</i> policy cascade, D8: static rules →
+    encoder → decompose → verify; it scales with communication, not computation), and
+    <b>eval inference</b> (re-running flows through the model). Everything below is
+    editable — rates are US list, mid-2026.</p>
   </header>
 
   <div class="grid">
@@ -198,35 +199,39 @@
       </section>
 
       <section class="panel moss">
-        <p class="eyebrow">Governance (Grieve · D7)</p>
-        <div class="field"><label for="turns">Turns / agent·hour</label>
-          <input type="number" id="turns" value="50" min="0" step="5"></div>
-        <div class="field"><label for="cpt">Claims / turn</label>
-          <input type="number" id="cpt" value="5" min="0" step="1">
-          <span class="hint">atomic claims the bus-side decomposer extracts per turn</span></div>
-        <div class="field"><label for="dshare">Decomposed share (%)</label>
-          <input type="number" id="dshare" value="30" min="0" max="100" step="5">
-          <span class="hint">% of captured tokens the decomposer reads — thoughts + output; tool-result payloads excluded</span></div>
+        <p class="eyebrow">Governance (Grieve · D8)</p>
+        <div class="seg" role="radiogroup" aria-label="Topology">
+          <label><input type="radio" name="topo" value="orch"><span>Orchestrator</span></label>
+          <label><input type="radio" name="topo" value="mixed" checked><span>Mixed</span></label>
+          <label><input type="radio" name="topo" value="swarm"><span>Peer swarm</span></label>
+        </div>
+        <div class="field"><label for="mph">Messages / agent·hour</label>
+          <input type="number" id="mph" value="10" min="0" step="1">
+          <span class="hint" id="topoHint"></span></div>
+        <div class="field"><label for="tokMsg">Tokens / message</label>
+          <input type="number" id="tokMsg" value="1000" min="0" step="100"></div>
+        <div class="field"><label for="scr">Screened % (past rules + encoder)</label>
+          <input type="number" id="scr" value="25" min="0" max="100" step="5">
+          <span class="hint">static rules (free) + encoder green-light the rest; includes sampled audits of greens</span></div>
+        <div class="field"><label for="cpm">Claims / screened message</label>
+          <input type="number" id="cpm" value="3" min="0" step="1"></div>
         <div class="field"><label for="vpct">Verified % (triage yellow)</label>
           <input type="number" id="vpct" value="2" min="0" max="100" step="0.5">
-          <span class="hint">share of claims escalated to LLM verification — the classifier-tuning loop exists to drive this down</span></div>
-        <div class="field"><label for="hpd">Handoffs / agent·day</label>
-          <input type="number" id="hpd" value="2" min="0" step="1"></div>
+          <span class="hint">claims escalated to LLM verification — the tuning loop exists to drive this down</span></div>
         <details class="adv"><summary>Advanced rates — governance</summary>
+          <div class="field"><label for="encRate">Encoder ($/M tok)</label><input type="number" id="encRate" value="0.02" step="0.01">
+            <span class="hint">self-hosted NLI-small; reads every message</span></div>
           <div class="field"><label for="gvIn">Decomposer in ($/M tok)</label><input type="number" id="gvIn" value="1" step="0.25">
-            <span class="hint">small/fast model — decomposition is mechanical</span></div>
+            <span class="hint">small/fast model; distill → ~0.1–0.5 self-hosted</span></div>
           <div class="field"><label for="gvOut">Decomposer out ($/M tok)</label><input type="number" id="gvOut" value="5" step="0.5"></div>
           <div class="field"><label for="gvOutShare">Decomposer out / in ratio</label><input type="number" id="gvOutShare" value="0.15" min="0" step="0.05"></div>
-          <div class="field"><label for="clsRate">Classifier ($/M claims)</label><input type="number" id="clsRate" value="5" step="1">
-            <span class="hint">NLI-small GPU inference, ~ms/claim</span></div>
+          <div class="field"><label for="clsRate">Claim screen ($/M claims)</label><input type="number" id="clsRate" value="5" step="1">
+            <span class="hint">tri-state NLI per claim, ~ms</span></div>
           <div class="field"><label for="vfIn">Verifier in ($/M tok)</label><input type="number" id="vfIn" value="1" step="0.25">
             <span class="hint">small judge by default; escalate hubs to a big model</span></div>
           <div class="field"><label for="vfOut">Verifier out ($/M tok)</label><input type="number" id="vfOut" value="5" step="0.5"></div>
           <div class="field"><label for="vin">Verify tokens in / claim</label><input type="number" id="vin" value="2000" step="250"></div>
           <div class="field"><label for="vout">Verify tokens out / claim</label><input type="number" id="vout" value="200" step="50"></div>
-          <div class="field"><label for="gin">Gate tokens in / handoff</label><input type="number" id="gin" value="25000" step="2500">
-            <span class="hint">slice verification + Tier-0 synthesis + entailment</span></div>
-          <div class="field"><label for="gout">Gate tokens out / handoff</label><input type="number" id="gout" value="2000" step="250"></div>
         </details>
       </section>
 
@@ -280,7 +285,7 @@
         <div>stored at retention <b id="oVol">–</b></div>
         <div>objects <b id="oObj">–</b></div>
         <div>compute <b id="oNodes">–</b></div>
-        <div>claims / yr <b id="oClaims">–</b></div>
+        <div>messages / yr <b id="oClaims">–</b></div>
         <div>eval runs / yr <b id="oRuns">–</b></div>
       </div>
 
@@ -319,7 +324,10 @@
     if(x>=1e3)return (x/1e3).toFixed(1)+"k"; return Math.round(x).toString(); }
   var GB=function(b){return b/1e9;};
 
-  var lastEngine="automq";
+  var lastEngine="automq", lastTopo="mixed";
+  var TOPO={orch:{mph:2,note:"hub-and-spoke: spawn briefs + results only"},
+            mixed:{mph:10,note:"working teams · periodic coordination"},
+            swarm:{mph:50,note:"debate-style peers — the paper's benchmark topologies"}};
 
   function calc(){
     // engine preset: set compute default only when engine changes
@@ -414,24 +422,29 @@
 
     var capYr=rows.reduce(function(s,r){return s+r.yr;},0);
 
-    // governance bucket (D7) — inference that exists only because of Greenwood:
-    // bus-side decomposition, triage classifier, selective verification, handoff gate.
-    var turns=num("turns"), cpt=num("cpt"), dshare=num("dshare")/100, vpct=num("vpct")/100, hpd=num("hpd");
-    var gvIn=num("gvIn"),gvOut=num("gvOut"),gvOutShare=num("gvOutShare"),clsRate=num("clsRate"),
-        vfIn=num("vfIn"),vfOut=num("vfOut"),vin=num("vin"),vout=num("vout"),gin=num("gin"),gout=num("gout");
-    var claimsYr = A*turns*8760*cpt;
-    var decompInYr = A*tph*8760*dshare, decompOutYr = decompInYr*gvOutShare;
+    // governance bucket (D8) — per-MESSAGE policy cascade; scales with communication,
+    // not computation. Cheapest first: static rules (free) → encoder → decompose → verify.
+    var topo=radio("topo");
+    if(topo!==lastTopo){ $("mph").value=TOPO[topo].mph; lastTopo=topo; }
+    $("topoHint").textContent=TOPO[topo].note;
+    var mph=num("mph"), tokMsg=num("tokMsg"), scr=num("scr")/100, cpm=num("cpm"), vpct=num("vpct")/100;
+    var encRate=num("encRate"),gvIn=num("gvIn"),gvOut=num("gvOut"),gvOutShare=num("gvOutShare"),
+        clsRate=num("clsRate"),vfIn=num("vfIn"),vfOut=num("vfOut"),vin=num("vin"),vout=num("vout");
+    var msgsYr   = A*mph*8760;
+    var msgTokYr = msgsYr*tokMsg;
+    var encYr    = msgTokYr*encRate/1e6;
+    var decompInYr = msgTokYr*scr, decompOutYr = decompInYr*gvOutShare;
     var decompYr = (decompInYr*gvIn + decompOutYr*gvOut)/1e6;
-    var triageYr = claimsYr/1e6*clsRate;
+    var claimsYr = msgsYr*scr*cpm;
+    var nliYr    = claimsYr/1e6*clsRate;
     var verifCnt = claimsYr*vpct;
     var verifYr  = verifCnt*(vin*vfIn+vout*vfOut)/1e6;
-    var handoffsYr = A*hpd*365;
-    var gateYr = handoffsYr*(gin*vfIn+gout*vfOut)/1e6;
     var govRows=[
-      {name:"Decomposer — small-model pass", vol:null, yr:decompYr},
-      {name:"Triage classifier — "+count(claimsYr)+" claims", vol:null, yr:triageYr},
-      {name:"Verification — "+count(verifCnt)+" claims ("+(vpct*100)+"%)", vol:null, yr:verifYr},
-      {name:"Handoff gate — "+count(handoffsYr)+" handoffs", vol:null, yr:gateYr}
+      {name:"Static rules — no ML", vol:null, yr:0},
+      {name:"Encoder triage — "+count(msgsYr)+" msgs", vol:null, yr:encYr},
+      {name:"Decomposer — "+count(msgsYr*scr)+" screened msgs", vol:null, yr:decompYr},
+      {name:"Claim screen (NLI) — "+count(claimsYr)+" claims", vol:null, yr:nliYr},
+      {name:"Verification — "+count(verifCnt)+" claims ("+(vpct*100)+"%)", vol:null, yr:verifYr}
     ];
     var govYr=govRows.reduce(function(s,r){return s+r.yr;},0);
 
@@ -463,7 +476,7 @@
     $("oVol").textContent=bytes(hotB+stdB+iaB+ (ramp<1?glaB/ramp:glaB));
     $("oObj").textContent=count(objPerSec)+"/s · "+count(objTotal)+" kept";
     $("oNodes").textContent=nodes+(nodes===1?" node · ":" nodes · ")+money(computeMo)+"/mo";
-    $("oClaims").textContent=count(claimsYr)+" ("+count(verifCnt)+" verified)";
+    $("oClaims").textContent=count(msgsYr)+" ("+count(claimsYr)+" claims · "+count(verifCnt)+" verified)";
     $("oRuns").textContent=count(runsYr)+" ("+money(runCost)+"/run)";
 
     // table
@@ -499,9 +512,12 @@
       +"transition fees <em>are</em> modeled; not modeled (all conservative): S3 Standard volume discounts "
       +"($0.021–0.022/GB above 50&nbsp;TB), committed-use discounts, and EBS being provisioned rather than "
       +"usage-billed (size for peak + provisioned MB/s, not average bytes). "
-      +"Governance (D7) scales with agent activity and usually dominates: the big dials are <code>Verified&nbsp;%</code> "
-      +"(what the classifier-tuning loop drives down), <code>Decomposed share</code>, and the verifier model — "
-      +"the ROI question is whether it's paid back by avoided cascade-redo (topic 11). "
+      +"Governance (D8) prices the message path only — intra-agent work is never eagerly decomposed "
+      +"(the immutable log makes retroactive decomposition free). Its dials, in order: <code>Messages/agent·hr</code> "
+      +"(a topology choice — chatty topologies buy more cascade risk AND pay for its screening), "
+      +"<code>Screened&nbsp;%</code> (what static rules + the tuning loop drive down), <code>Verified&nbsp;%</code>, "
+      +"and the decomposer model (distill → self-hosted for another 5–20×); Batch API halves off-path work. "
+      +"The ROI question is whether it's paid back by avoided cascade-redo (topic 11). "
       +"Eval assumes hermetic replay (recorded tool-results as fixtures → no tool cost); "
       +(document.getElementById('cache').checked
         ?"context billed as one cache write per case per re-run + cache-reads for the other samples (amortized)."

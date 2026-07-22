@@ -36,17 +36,17 @@ Component names and the reasoning behind them are in **`NAMES.md`**
 
 ## Reading order
 1. `decisions.md` — the settled design decisions (P0 event-sourcing; D1 claims/verifier;
-   D2 handoff; D3 async; D4 evals; D5 Graft; D6 backing store; D7 bus-side decomposition
-   + classifier triage). **Start here.**
+   D2 spawn briefs; D3 async; D4 evals; D5 Graft; D6 backing store; D7 bus-side
+   decomposition; D8 messaging + per-message policy). **Start here.**
 2. `NAMES.md` — the component names and what each one is.
-3. `topics/07-*` — the unified runtime design (resume + genealogy handoff).
-4. `topics/08-concrete-spec.md` — the buildable layer (envelope, topics, folds, verifier,
-   handoff protocol).
+3. `topics/07-*` — the unified runtime design (resume + the spawn-brief pattern; see D8).
+4. `topics/08-concrete-spec.md` — the buildable layer (envelope, topics, folds, the
+   Grieve policy cascade, messaging).
 5. `WORK-BREAKDOWN.md` — projects → milestones → tickets.
 Topics 01–06 and 09 are supporting design rationale.
 
 ## Key files
-- `decisions.md` — ADR-style decisions log (P0, D1–D7)
+- `decisions.md` — ADR-style decisions log (P0, D1–D8)
 - `NAMES.md` — component names + rationale
 - `WORK-BREAKDOWN.md` — projects / milestones / tickets
 

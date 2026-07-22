@@ -13,7 +13,7 @@ summary: Running log of resolved/proposed design decisions for Greenwood, most r
 # Greenwood — Decisions Log
 
 *Ordering: P0 (the foundational principle) is pinned first; the D-entries below it run
-newest-first, append-at-the-top — read bottom-up (D1→D6) for chronological order.*
+newest-first, append-at-the-top — read bottom-up (D1→D8) for chronological order.*
 
 ## P0 — FOUNDATIONAL PRINCIPLE: event sourcing end-to-end  (Terra, 2026-06-30)
 
@@ -44,7 +44,69 @@ This is recorded as its own design area (effect classes, compensation handlers).
 
 ---
 
-## D7 — Decomposition moves bus-side; mechanical provenance; classifier triage  (Terra, 2026-07-02 — revises D1)
+## D8 — Messaging is the inter-agent primitive; governance is a per-message policy  (Terra, 2026-07-02 — revises D2/D3/D7 scope)
+
+**Decision:** Agents communicate by **messages** (to an agent or a room — the Chattermax
+heritage, governed this time). A message is the **only** thing that crosses agents, and
+the message path is the **only** place eager governance runs — which is exactly the
+scope *From Spark to Fire* built and measured. Cascades propagate through communication;
+work that never leaves an agent can't cascade, so taxing computation (D7's
+decompose-everything, ~$1.4B/yr at 500k agents) was taxing the wrong thing.
+
+**Handoff is demoted from primitive to pattern.** Interrogated honestly, "handoff" was
+(a) spawning a sub-agent with a curated brief — which is just a **spawn message**, and
+(b) successor-after-death — which is **resume**. Nothing requires it as a mechanism.
+D2's machinery (Tier-0 synthesis, progressive disclosure, entailment guardrail) survives
+as the **spawn-message composition pattern** — a library, not a bus feature — and the
+spawn message is gated like any other message.
+
+**Governance = a per-message policy function**, `policy(message, sender, recipient,
+content) → deliver | screen | verify`, applied as a four-stage cascade (cheapest first):
+1. **Static rules — no ML.** Declarative, deterministic config matched on message
+   *type/attributes*: acks, status pings, and typed tool-result forwards deliver
+   untouched; spawn briefs and messages **to hub roles** always screen; effect-gate
+   premises always verify. Policy config is versioned as events (P0); every decision is
+   logged and auditable. Free.
+2. **Encoder triage** (self-hosted, ~ms, ~$0.02/M tok) for messages static rules don't
+   decide: green → deliver (with a **sampled audit** rate so the false-green rate is a
+   measured SLO, not a hope); else →
+3. **Decomposition + tri-state screen** (small model; the D7 pipeline, now
+   message-scoped): claims screened against confirmed context; red → block + feedback;
+   yellow →
+4. **LLM verification** (selective, the paper's Balanced policy).
+
+**Trust semantics unchanged:** only screened content enters a recipient's trusted
+context — D3's boundary-gate guarantee, applied message-by-message. The effect gate
+(topic 08 §5a) still covers the other cascade path (world actions) with on-demand
+verification. Intra-agent traffic is captured + manifested but never eagerly decomposed;
+`raw` is immutable, so **retroactive decomposition** (the paper's offline mode) is
+always available for forensics — laziness costs no auditability.
+
+**Cost (the reason this decision exists):** governance now scales with *communication,
+not computation* — and communication intensity is a topology choice, so the cost model
+doubles as a topology-design signal. At mixed-coordination assumptions (10 msgs/agent·hr,
+1k tok/msg, ~25% screened past the static+encoder stages): **~$22M/yr at 500k agents /
+~$22k/yr at 500 agents** (~0.1% overhead on runtime inference) — vs D7's $1.46B/$1.46M.
+Named topology presets (orchestrator / mixed / peer-swarm) live in the calculator;
+**measure real message rates per topology** is a top open parameter.
+
+**Trade-off (recorded, monitored):** green-lit messages are delivered unscreened — a
+bounded false-negative surface. Bounded by: hub-directed messages never skip; sampled
+audits measure the false-green rate continuously and feed the tuning flywheel; capture +
+manifests keep targeted rewind available when something surfaces later. Uniform
+Strict-on-everything remains a *policy setting* for high-stakes deployments, not the
+architecture.
+
+**Supersedes:** D2's handoff-as-primitive (pattern now; guardrails survive); D3's gate
+becomes the per-message screen (same semantics, finer grain); D7's pipeline is re-scoped
+from all-traffic to the message path (its decomposer/classifier/flywheel machinery is
+unchanged — it just runs per message, behind the policy).
+
+**Related:** [[topics/08-concrete-spec]], [[topics/11-scalability-and-cost]], D2, D3, D7.
+
+---
+
+## D7 — Decomposition moves bus-side; mechanical provenance; classifier triage  (Terra, 2026-07-02 — revises D1; **re-scoped to the message path by D8**)
 
 **Decision:** Drop **agent self-decomposition** (the agent "vibe-checking" its own output
 into claims). Three replacements:
@@ -188,7 +250,7 @@ sources include the verifier's own `REJECTED` transitions (D1).
 
 ---
 
-## D3 — Governance timing: inline vs. async  (proposed 2026-06-30)
+## D3 — Governance timing: inline vs. async  (proposed 2026-06-30; **gate now applies per message — D8**, same semantics at finer grain)
 
 **Decision (proposed):** **Async.** Claim confirmation is a separate **event** (a
 trust-transition), per P0. The pipeline never blocks globally — claims flow immediately;
@@ -223,7 +285,7 @@ drifting verifier).
 
 ---
 
-## D2 — Handoff granularity: what crosses an A→B handoff  (proposed 2026-06-30)
+## D2 — Handoff granularity: what crosses an A→B handoff  (proposed 2026-06-30; **partially superseded by D8** — handoff is now the spawn-message *pattern*; the tiering + entailment guardrail below survive as that pattern)
 
 **Decision (proposed):** **Atomic claims stay the substrate** (never coarsened — trust,
 provenance, rollback all live there). The handoff payload is **graduated / progressive
