@@ -5,15 +5,16 @@ project: Greenwood
 tags: [decisions, adr, claims, decomposition, governance, handoff]
 sources: [spark-to-fire, claude-api-skill, engineering]
 created: 2026-06-30
-updated: 2026-06-30
+updated: 2026-07-29
 status: active — proposed decisions pending Terra's final confirmation
 summary: Running log of resolved/proposed design decisions for Greenwood, most recent first. Each entry: the decision, the options, and the reasoning.
 ---
 
 # Greenwood — Decisions Log
 
-*Ordering: P0 (the foundational principle) is pinned first; the D-entries below it run
-newest-first, append-at-the-top — read bottom-up (D1→D8) for chronological order.*
+*Ordering: P0 (the foundational principle) is pinned first, R1 (the release goal) second;
+the D-entries below run newest-first, append-at-the-top — read bottom-up (D1→D8) for
+chronological order.*
 
 ## P0 — FOUNDATIONAL PRINCIPLE: event sourcing end-to-end  (Terra, 2026-06-30)
 
@@ -41,6 +42,38 @@ quarantines descendants, runs registered compensation for reversible external ef
 and surfaces irreversible ones for humans. Actions are therefore trust-gated too — see
 the **effect gate** (topic 08 §5a): irreversible tool effects require confirmed premises.
 This is recorded as its own design area (effect classes, compensation handlers).
+
+---
+
+## R1 — RELEASE GOAL: first usable garden iteration ships 2026-08-16  (Terra, 2026-07-29)
+
+**Decision:** the software garden ships a first usable iteration on **August 16, 2026**.
+The first user is a **junior engineer managing runtime operations of 4-5 apps** on
+Bit Complete's bc-prod/kploy platform. This goal is new (stated 2026-07-29) and was
+previously recorded nowhere in the KB — a gap flagged by the 2026-07 research sweep
+(`research/software-garden-2026-07/00-research-summary.md` §1): the planning navigator
+could not reason about a release absent from its own system of record.
+
+**What "usable" means (working definition, refine as scope settles):** the junior can
+supervise agent-assisted operations of the 4-5 apps — see status, approve/deny risky
+actions from evidence, resume/kill agents, and stay within cost caps — without senior
+attention on the happy path.
+
+**Consequences:**
+- Milestone ordering in `WORK-BREAKDOWN.md` is under revision (2026-07-29): the research
+  sweep found the M1→M6 ordering schedules operator-facing safety (gates, cost caps,
+  crash detection, observability) last, while every evidence strand says those are
+  MVP-critical for this user. Re-sequencing discussion in progress with Terra.
+- Positioning: lead with the concrete job ("run these 4-5 apps safely with agents"),
+  not the ecosystem vision. Governance-by-default is the uncontested wedge vs.
+  Buzz/Kasava/Efecto.
+- The date is a self-imposed internal milestone (no external announcement pressure):
+  scope trades against the date freely, but the first user's trust does not — a
+  gate/patrol that cries wolf in week one kills the release regardless of feature count.
+
+**Still open:** exact scope cut (which milestones/tickets are in), runtime stack
+(blocks P1/P2), D1–D6 confirmations, and the greenfield hygiene countermeasures
+(topic 12).
 
 ---
 
