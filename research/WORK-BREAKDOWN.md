@@ -6,7 +6,7 @@ tags: [work-breakdown, roadmap, linear, tickets, milestones, projects, mvp]
 sources: [decisions, topics-05-08]
 created: 2026-06-30
 updated: 2026-06-30
-status: draft — the SOURCE for Linear ticket creation (do NOT create in Linear until Terra authorizes)
+status: reference — Greenwood full-spec breakdown, demoted per D11 (2026-07-29, "Greenwood is an idea source, not the deliverable"); the ACTIVE ticket source for the Aug-16 release is R1-WORK-BREAKDOWN.md; this file remains the parts bank for when full-Greenwood problems arise (do NOT create in Linear until Terra authorizes)
 summary: The Greenwood design decomposed into buildable units. 10 projects, 6 sequencing milestones, ~40 implementation-ready tickets. Each ticket has Why/Scope/Acceptance/Deps/Refs so it can become a Linear issue verbatim. Critical path: single-agent MVP → claims+governance → messaging + per-message governance → eval + adapters → hardening.
 ---
 

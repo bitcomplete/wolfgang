@@ -71,9 +71,68 @@ attention on the happy path.
   scope trades against the date freely, but the first user's trust does not — a
   gate/patrol that cries wolf in week one kills the release regardless of feature count.
 
-**Still open:** exact scope cut (which milestones/tickets are in), runtime stack
-(blocks P1/P2), D1–D6 confirmations, and the greenfield hygiene countermeasures
-(topic 12).
+**Still open:** ~~exact scope cut~~ **ruled 2026-07-29 — see D9/D10/D11 and
+`R1-WORK-BREAKDOWN.md`**; D1–D6 confirmations (now reference-tier per D11); hygiene
+countermeasures (topic 12) fold into R1 tickets.
+
+---
+
+## D11 — Greenwood is an idea source, not the deliverable  (Terra, 2026-07-29)
+
+**Decision:** "We don't need to ship Greenwood as spec'd — we just want the ideas of
+it. We're building the software Garden... Greenwood is just an idea that may make
+sense to solve a problem one day — but we need to deliver a version of it that solves
+problems today."
+
+**Consequences for R1 scope (Terra's rulings on the sacrifice ledger):**
+1. **Per-message governance IS in R1** — as the idea, pragmatically: policy applied at
+   every inter-agent boundary (spawn briefs, result returns) with logged decisions;
+   NOT the full claims/cascade machinery.
+2. **Verification IS in R1** — as the idea, pragmatically: evidence-checked
+   report-back (a verifier pass confirms an agent's claimed outcomes against evidence
+   before the result reaches the junior); NOT the Kafka verifier/claims substrate.
+3. **Learning IS in R1** — "capture only isn't learning, just feedback capture": a
+   working feedback→eval→regression loop ships (P9-lite), not just the event schema.
+4. Single-agent co-pilot ceiling: fine for v1.
+5. Substrate: see D9. 6. Pilot harness: see D10.
+
+**Status of the full spec:** `WORK-BREAKDOWN.md` (P1–P10) demotes to reference
+architecture — the parts bank to draw on when a real problem demands them.
+`R1-WORK-BREAKDOWN.md` is the active source for tickets.
+
+## D10 — R1 pilot on Claude Code / Claude Agent SDK, single-user, subscription plans  (Terra, 2026-07-29)
+
+**Decision:** the pilot runs agents on Claude Code / the Claude Agent SDK, leveraging
+Claude subscription plans to de-risk cost. The system is **single-user mode** in v1
+(fine for V1).
+
+**Consequences:**
+- Grafts/M5 unnecessary for v1 (one harness family). Multi-harness interop returns
+  only if a real need appears.
+- Cost model changes: flat-rate plans absorb most spend risk; rails remain (max_turns,
+  session time caps, velocity/loop detection) because plan rate-limits throttle rather
+  than stop runaways, and "is this normal?" visibility is still an operator need.
+- SDK gives per-run `max_turns`/`max_budget_usd`, sessions/resume, and PreToolUse
+  hooks — several R1 rails become configuration, not construction.
+- **Re-opens the runtime-language question:** with the agent runtime being the SDK
+  (TypeScript/Python), a bespoke Rust runtime is no longer implied; the garden service
+  (log, gates, projections, surfaces) should likely match the SDK language. Supersedes
+  the Rust lean from the round-2 substrate note. **Needs Terra:** TypeScript vs Python.
+
+## D9 — Event-stream backend is swappable; Postgres first; Kafka scrapped for now  (Terra, 2026-07-29 — supersedes the "Kafka API as substrate" line; re-scopes topic 05 and D6)
+
+**Decision:** "We can scrap Kafka for now — we probably will never need Kafka for
+this." Greenwood('s ideas) are built against a **swappable event-log interface**
+(LogStore trait: append, keyed ordering, replay-from-offset, compaction-or-equivalent,
+idempotent append). **Postgres is the first backend** (message-db pattern; zero new
+deployables on bc-prod). Redis (Streams) is a candidate second backend. Kafka-API
+engines (Redpanda/AutoMQ) remain a documented escape hatch if scale ever demands —
+the round-2 substrate research (research-round2-substrate-ops-weight.md) is the
+evidence base and ranking.
+
+**Guard (from that research):** trait discipline enforced by a conformance test suite
+run against ≥2 implementations (in-memory + Postgres) from day one, so no backend's
+quirks leak into folds. P0 is untouched — it mandates event sourcing, not Kafka.
 
 ---
 
