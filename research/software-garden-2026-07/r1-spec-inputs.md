@@ -124,6 +124,121 @@ From `notes/research-emergent-1-deep.md`:
 - **DC-5** Default numbers as versioned policy: $15–25/agent-day, $50/hr velocity,
   50-turn/10-min/500K-token session rails, 90% wrap-up threshold (B.5/B.6/B.7/B.11).
 
+---
+
+# Round 2 (2026-07-29, later the same day) — flagged-gap deep dives
+
+Six dives into gaps the corpus itself flagged. Four complete below; **break-glass and
+patrol-trust are pending** (a multi-hour tool-safety-classifier outage blocked agent
+launches and web access; see method caveats inside each note — several claims carry
+`[verify]` tags for the next web session).
+
+## D. Stat verification (`notes/research-round2-stat-verification.md`)
+
+Verdicts on the 12 headline claims cited in spec discussions:
+
+- **VERIFIED:** Spark-to-Fire ≥89% cascade prevention (actually 89/93/94% by mode vs
+  ~2–3% baselines — stronger than quoted); MAST 1,600+ traces, "gains often minimal";
+  Anthropic ~15× multi-agent token cost (agents ~4×, multi-agent ~15× chat; tokens
+  explain ~80% of BrowseComp variance); METR 19%-slower/believed-20%-faster.
+- **CORRECTED:** the "juniors over-approve" framing — arXiv 2602.00496 (N=10,
+  qualitative) actually found novices **mis-calibrate in both directions**
+  (over-reliance *and* cautious avoidance). Design consequence: approval UX must make
+  confidence legible, not merely add friction. Corpus wording needs a correction pass.
+  Also: MAST is the UC Berkeley group; Neubig belongs to CAID (CMU).
+- **DO NOT CITE (unverifiable):** "Anthropic 47% debugging-skill drop"; the "$47k agent
+  loop" anecdote; ">4h agents = 90% higher failure risk". (InfoQ $14k/day and $6.5k
+  incidents remain verified.)
+- **BLOCKED, must re-verify before the spec hardens:** SREGym's 38.9–72.6% range
+  (abstract confirms only "up to 40% end-to-end differences"); arXiv 2606.01435
+  (+28-point freshness delta); arXiv 2606.31498 (protocol-gap paper — underpins the
+  differentiation thesis; the ID itself flagged as suspicious); CAID +25.6%. Re-run
+  list is in the note.
+
+## E. Substrate & runtime (`notes/research-round2-substrate-ops-weight.md`)
+
+Ranked against the "one notch harder than kploy" bar for M1:
+1. **Postgres-backed event log behind a Greenwood-owned Kafka-shaped log trait** — zero
+   new deployables on bc-prod; P0 mandates event sourcing, not Kafka; all five log
+   properties hold at M1 scale (message-db pattern); D6's compaction-keyspace problem
+   dissolves (projection = table). Cost: re-opens the decided Kafka-API line; guard =
+   CI-test the trait against a real Kafka-API engine from day one.
+2. **Redpanda Community 3-node** if the Kafka-API line holds — single C++ binary incl.
+   Schema Registry, one notch; caveat: tiered storage is enterprise-licensed (a cost
+   feature, not correctness, at M1 — payloads-by-reference on MinIO suffices).
+3. **AutoMQ deferred to M2+** as the named D6 endgame (Apache 2.0, solves
+   compaction-on-S3, but JVM fork + WAL + controller + S3 chain ≈ two notches — the
+   stack shape Chattermax Phase 8 condemned).
+- Eliminated: WarpStream (cannot self-host — Confluent-hosted control plane);
+  NATS/Pulsar (no compaction semantics); **Temporal/Restate/DBOS betray P0** (private,
+  per-workflow, truncated logs — Temporal caps 51,200 events/50MB; Rootlines and D4
+  hermetic evals lose their input). Managed Kafka tiers = dev/CI escape hatches only.
+- **Runtime language: Rust, decidable now** — rdkafka covers idempotence/transactions,
+  Chattermax already shipped an rdkafka idempotent producer, Kafka Streams buys nothing
+  for bespoke folds; a thin log trait de-risks the substrate question entirely.
+- Method caveat: managed-tier/durable-execution/client sections are training-knowledge
+  cross-checked against KB prior research, `[verify]`-tagged; agent asserts no tag
+  flips the ranking.
+
+## F. Approval semantics (`notes/research-round2-approval-semantics.md`)
+
+Answers to the four open questions from the round-1 gates dive:
+1. **Only human principals approve — no automated identity holds the checker role.**
+   Shipped precedent: Entra PIM bars service principals from approving; GitHub required
+   reviewers are humans/teams only (bots participate only as registered deterministic
+   protection rules). SoD logic: same-garden agents fail independence (shared
+   operator/model/compromise surface). Spec: `ApprovalGranted` valid only from
+   `Garden::Human`; `checker != maker`; at T4 `checker != originating_principal`.
+2. **Cedar entity model:** typed principals (`Garden::Human`, `Garden::Agent`), actions
+   auto-generated per tool op (AgentCore convention) each carrying `required_tier`,
+   resources = app/environment hierarchy, envelope-verified `originating_principal` in
+   context. **Tier law as two forbids:** action tier ≤ min(principal.tier_ceiling,
+   originating_principal.max_tier); each denial names its ceiling.
+3. **Three TTL clocks.** Precedented: pending-approval hours-to-days (PIM 24h fixed,
+   Teleport 1h–1wk); elevation hours (PIM 8h default). No shipped precedent for
+   granted-but-unexecuted validity (systems consume approvals instantly) — design
+   call: propose T3 pending 4h / validity 15min; T4 pending 24h / validity 60min;
+   minted-credential ≤8h; all versioned policy numbers.
+4. **Gate placement (CQRS practice, Axon):** Cedar evaluation in a bus-side dispatch
+   interceptor; approval invariant in the decider; `evolve` never calls Cedar — the
+   interceptor's ruling is recorded as an event stamped `policy_version`, so folds
+   replay deterministically under any later policy. (Recorded-decision half is a
+   design call grounded in Decider purity; no named external pattern exists.)
+
+## G. Agent identity & signed actions (`notes/research-round2-agent-identity.md`)
+
+**Do not adopt Buzz's keypair-per-agent/signature-per-event for R1** — in a
+single-cluster deployment where the operator provisions keys and the bus is the trust
+anchor, it's audit theater with real key-management cost (Buzz needs it because its
+relay is untrusted). Instead:
+- **Reserve three T1.1 envelope fields day one** (identity becomes key management,
+  never a migration): `Principal producer_principal {id, kind, runtime}` (id =
+  `gen_ai.agent.id`, composing with DC-4); `OriginatingHuman originating_human` with a
+  reserved unpopulated `mac` (DC-3); `Signature signature {key_id, scheme, sig}`
+  reserved, plus one spec line: **signatures sign the canonical-hash `event_id`**.
+- **Impersonation control at the broker, not in envelope crypto:** per-agent Kafka
+  principals + ACLs binding principal → producer id (M1–M2).
+- **Sign decisions, not thoughts:** if anything is signed early, it's
+  `ApprovalGranted`/`PolicyDecision` — highest audit value per unit of key surface.
+- SPIFFE/per-agent keypairs only if Greenwood ever federates across trust domains.
+
+## New decision candidates from round 2 (need Terra)
+
+- **DC-6** Substrate for M1: re-open the decided Kafka-API line (Postgres-behind-trait)
+  — yes/no; if no, Redpanda Community; AutoMQ stays the M2+ endgame either way (E).
+- **DC-7** Runtime language: Rust (E; unblocks P1/P2 under either DC-6 outcome).
+- **DC-8** Human-only approvers + tier law as two forbids (F.1/F.2) — extends DC-1/DC-2.
+- **DC-9** TTL defaults as versioned policy: T3 4h/15min, T4 24h/60min, credential ≤8h (F.3).
+- **DC-10** T1.1 envelope reservations: producer_principal, originating_human.mac,
+  signature field + "signatures sign event_id" rule (G) — concretizes DC-3/DC-4.
+
+## Pending round-2 items
+- Break-glass design note (agent paused by the outage, self-resuming).
+- Patrol-trust / conformance-checking note (launch blocked by the outage, retrying).
+- Stat re-verification of the four BLOCKED claims (agent has a retry window armed).
+- Corpus correction pass: fix "juniors over-approve" wording per D; strip do-not-cite
+  stats.
+
 ## Use
 Input to the WORK-BREAKDOWN revision (floor/stretch split). Rails tickets should cite
 the specific finding (e.g. "T-gate acceptance: PreToolUse veto holds under
