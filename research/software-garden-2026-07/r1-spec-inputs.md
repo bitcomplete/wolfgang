@@ -149,11 +149,16 @@ Verdicts on the 12 headline claims cited in spec discussions:
 - **DO NOT CITE (unverifiable):** "Anthropic 47% debugging-skill drop"; the "$47k agent
   loop" anecdote; ">4h agents = 90% higher failure risk". (InfoQ $14k/day and $6.5k
   incidents remain verified.)
-- **BLOCKED, must re-verify before the spec hardens:** SREGym's 38.9–72.6% range
-  (abstract confirms only "up to 40% end-to-end differences"); arXiv 2606.01435
-  (+28-point freshness delta); arXiv 2606.31498 (protocol-gap paper — underpins the
-  differentiation thesis; the ID itself flagged as suspicious); CAID +25.6%. Re-run
-  list is in the note.
+- **RESOLVED (re-verified 2026-07-29 post-outage):** SREGym 38.9–72.6% VERIFIED
+  (full text, Table 3; mitigation stage 57.3–78.5%); CAID +25.6% VERIFIED (absolute,
+  PaperBench, +14.7% Commit0; the "Anthropic" affiliation artifact dropped — Neubig is
+  CMU). CORRECTED (precision): 2606.01435's like-for-like delta is **+10.8** (FC-SH);
+  +28 is only vs HippoRAG-v2 multi-hop — quote with conditions. **CORRECTED, major:
+  2606.31498 does NOT claim MCP/A2A/ACP can't express budgets/delegation** — its
+  taxonomy is membership, deliberation, voting, dissent, escalation, audit/replay; the
+  differentiation argument may cite it for audit/replay + escalation gaps, and must
+  cite the orchestration survey for budgets/delegation. Corpus corrections applied
+  2026-07-29 (summary, arXiv note, all four reports).
 
 ## E. Substrate & runtime (`notes/research-round2-substrate-ops-weight.md`)
 
@@ -202,8 +207,12 @@ Answers to the four open questions from the round-1 gates dive:
 4. **Gate placement (CQRS practice, Axon):** Cedar evaluation in a bus-side dispatch
    interceptor; approval invariant in the decider; `evolve` never calls Cedar — the
    interceptor's ruling is recorded as an event stamped `policy_version`, so folds
-   replay deterministically under any later policy. (Recorded-decision half is a
-   design call grounded in Decider purity; no named external pattern exists.)
+   replay deterministically under any later policy. (Recorded-decision half was
+   initially a design call; the agent's post-outage pass found external grounding —
+   Faramesh (arXiv 2601.17744): non-bypassable authz boundary with append-only decision
+   provenance keyed by canonical action hashes for deterministic replay; and Zylos's
+   replayable agent runtimes with `tool.proposed` → `tool.authorized` as first-class
+   events — independent publication of the gate-in-the-fold shape, strengthening DC-1.)
 
 ## G. Agent identity & signed actions (`notes/research-round2-agent-identity.md`)
 
@@ -222,6 +231,65 @@ relay is untrusted). Instead:
   `ApprovalGranted`/`PolicyDecision` — highest audit value per unit of key surface.
 - SPIFFE/per-agent keypairs only if Greenwood ever federates across trust domains.
 
+## H. Break-glass (`notes/research-round2-break-glass.md`)
+
+- **Google doctrine (BSRS ch.5):** break-glass bypasses authz completely; every use is
+  monitored and reviewed; **frequent use means "the standard path is inadequate —
+  redesign it"** (frequency is a gate-quality metric); test it regularly.
+- **Incident-scoped elevation is the modern shape** (incident.io + Apono): declaring
+  an incident auto-grants JIT access that auto-expires at incident close, every grant
+  tied to the incident id — bind break-glass to a declared incident object on the bus,
+  not a credential.
+- **No published junior/tiered break-glass standard exists** — assemble from:
+  minimum-necessary emergency scope + pre-authorized emergency runbooks (vetted
+  restart/scale/rollback with blast-radius caps and auto-rollback) +
+  invoke-alone-but-page-a-second-person. Design-time vetting substitutes for
+  invocation-time judgment.
+- **Kill switches are the emergency floor:** permanent booleans (pause-agents,
+  freeze-deploys) are instant, reversible, need no access widening — design the
+  emergency set so break-glass rarely has anything left to do.
+- **The anti-pattern is cultural:** invocation must be unblocked but *costly
+  afterward* (page + named incident + mandatory blameless review + visible metric).
+- **R1 proposal (in the note, pending Terra):** trigger = active outage AND gate
+  blocks/too slow; `IncidentDeclared` event (one command, never silent); pages Terra
+  <60s but junior never waits; scope widens *tiers not identity* (pre-vetted set runs
+  at T2 for that app: kploy rollback-to-last-good, restart/scale, kill switches,
+  freeze — never data mutation/secrets/T4); incident mode is decider state enforced by
+  the same fold gate; auto-verify post-conditions with auto-rollback; 60-min TTL or
+  incident close; blameless review within 72h; >1–2 invocations/month ⇒ recalibrate
+  tiers, never reprimand; one game-day drill with the junior before Aug 16.
+
+## I. Patrol trustworthiness (`notes/research-round2-patrol-trust.md`)
+
+- **The bar has a published number:** Google Tricorder requires <10% *effective* false
+  positives (any finding the developer ignores counts) with a "not useful" button that
+  auto-disables noisy analyzers → the garden's bar: **≥90% effective precision per
+  check**, junior-measured. Admission checklist: understandable, actionable **with fix
+  attached**, <10% eFP, significant impact.
+- **The death spiral is documented:** 35–91% of SAST warnings unactionable; streams at
+  30–70% precision get ignored wholesale; devs prefer false negatives to false
+  positives.
+- **LLMs may filter, never originate:** untuned LLM reviewers run 40–80% FP vs ~3%
+  for tuned deterministic rules — but LLM agents *filtering* deterministic output cut
+  92%→6.3% FP. Ten LLM reviewers once unanimously endorsed a non-existent
+  vulnerability; only execution-based verification killed it → verify-by-execution
+  beats consensus.
+- **Digest > pings:** batching to ~3×/day improves productivity and channel trust
+  recovers; findings are almost never page-worthy (SRE doctrine).
+- **Lifecycle mechanics to copy:** GitHub code-scanning fingerprint dedupe +
+  auto-close-when-fixed + typed dismissals; Scorecard's in-repo typed exemptions
+  (add a required expiry); Scorecard's tri-state (inconclusive ≠ fail) kills a whole
+  bogus-finding class; Kyverno audit→enforce as the shadow-mode path.
+- **R1 Patrol Charter (in the note, pending Terra):** deterministic sources only (LLM
+  phrases the digest, never originates/drops/re-scores); 5 checks — health-contract
+  probes, deploy-vs-repo drift, git hygiene >7d, runbook contract (verified-within-TTL
+  + live-fact links dereference), cert/backup; shadow to Terra first, graduate per
+  (check, app) after 7 clean days + a seeded-fault firing test; ≥90% rolling effective
+  precision with one-tap fixed/not-useful; 2 not-useful strikes in 14 days
+  auto-demotes to shadow; one daily per-app digest (all-clear = one line); typed
+  exemptions with required expiry via PR; anything unready by Aug 16 ships in shadow —
+  a smaller trustworthy patrol beats a complete noisy one.
+
 ## New decision candidates from round 2 (need Terra)
 
 - **DC-6** Substrate for M1: re-open the decided Kafka-API line (Postgres-behind-trait)
@@ -231,13 +299,19 @@ relay is untrusted). Instead:
 - **DC-9** TTL defaults as versioned policy: T3 4h/15min, T4 24h/60min, credential ≤8h (F.3).
 - **DC-10** T1.1 envelope reservations: producer_principal, originating_human.mac,
   signature field + "signatures sign event_id" rule (G) — concretizes DC-3/DC-4.
+- **DC-11** Break-glass design per H's R1 proposal (incident-scoped tier widening,
+  paired-by-page, pre-vetted T2 emergency set, 60-min TTL, blameless review).
+- **DC-12** Feedback capture in R1 (see `research/topics/13-human-feedback-eventual-consistency.md`):
+  Feedback event schema + reason-required-on-deny + edit-before-approve diffs +
+  close-out notes + patrol-finding lifecycle — capture ships in R1, learning (P9/M4)
+  folds it later.
+- **DC-13** R1 Patrol Charter per I (deterministic-only sources, 5 checks, ≥90%
+  effective-precision gate, shadow-first graduation, daily digest, typed expiring
+  exemptions).
 
-## Pending round-2 items
-- Break-glass design note (agent paused by the outage, self-resuming).
-- Patrol-trust / conformance-checking note (launch blocked by the outage, retrying).
-- Stat re-verification of the four BLOCKED claims (agent has a retry window armed).
-- Corpus correction pass: fix "juniors over-approve" wording per D; strip do-not-cite
-  stats.
+## Round-2 status: COMPLETE (2026-07-29)
+All six dives done (D–I); stat re-verification finished; corpus corrections applied.
+Decision queue for Terra: DC-1..DC-13 plus the floor/stretch milestone split.
 
 ## Use
 Input to the WORK-BREAKDOWN revision (floor/stretch split). Rails tickets should cite

@@ -7,16 +7,16 @@ status: draft
 
 # Round-2 stat verification (primary sources)
 
-**Method:** each claim was checked against its primary source on 2026-07-29 (arXiv page fetch, first-party post, or the repo's own full-paper review). **Caveat on completeness:** a multi-hour outage of the tool-safety classifier blocked all web access (WebFetch/WebSearch/curl/subagents) partway through this pass; four arXiv abstracts were fetched live before the outage, one claim is settled by a full-paper review already in this repo, and two claims rest on model knowledge of pre-2026 primary sources (flagged). Everything else is marked **BLOCKED** and must be re-run when web access recovers — BLOCKED means *not yet checked*, not *false*.
+**Method:** each claim was checked against its primary source on 2026-07-29 (arXiv abstract/full-text fetch, first-party post, or the repo's own full-paper review). A multi-hour tool outage interrupted the pass mid-way; the four checks it blocked (items 2 full-text, 10, 11, 12) were completed by live fetch after recovery the same day. Two verdicts (4, 6) rest on model knowledge of pre-2026 primary sources rather than a live fetch — flagged inline; exact-wording spot-checks listed at the end.
 
-Verdicts: **VERIFIED** (exact figure quoted from primary), **CORRECTED** (real figure/claim differs), **UNVERIFIABLE** (no primary source exists — do not cite), **BLOCKED** (outage prevented the check — do not cite until re-run).
+Verdicts: **VERIFIED** (exact figure quoted from primary), **CORRECTED** (real figure/claim differs), **UNVERIFIABLE** (no primary source exists — do not cite).
 
 ## Verdict table
 
 | # | Claim | Verdict | Exact primary figure | Source |
 |---|-------|---------|---------------------|--------|
 | 1 | Spark-to-Fire ≥89% cascade prevention | VERIFIED (live fetch + local full-paper review) | "prevents final infection in at least 89% of runs across operating modes" — Speed ~0.89 / Balanced 0.93 / Strict 0.94 BICR vs ≈2.2% no-defense, ≈3.1% detection-only | https://arxiv.org/abs/2603.04474 |
-| 2 | SREGym 38.9–72.6% diagnosis | PARTIALLY VERIFIED (live abstract fetch) | Abstract: 90 realistic SRE problems; "up to 40% differences in end-to-end results" across failure kinds. The 38.9–72.6% / 57.3–78.5% ranges and model names are NOT in the abstract — full-text check blocked | https://arxiv.org/abs/2605.07161 |
+| 2 | SREGym 38.9–72.6% diagnosis | VERIFIED (full text, Table 3) | "diagnosis success rates ranging from 38.9% to 72.6%"; mitigation 57.3–78.5%. Agents: Stratus (Sonnet-4.6, Kimi K2.5), Claude Code (Sonnet-4.6), Codex (GPT-5.4) | https://arxiv.org/abs/2605.07161 |
 | 3 | MAST 1,600+ traces; MAS gains minimal | VERIFIED (live fetch); affiliation note CORRECTED | "1600+ annotated traces collected across 7 popular MAS frameworks"; gains "often minimal"; 14 modes / 3 categories. Neubig is NOT a MAST author — it's the UC Berkeley group (Cemri … Stoica) | https://arxiv.org/abs/2503.13657 |
 | 4 | Anthropic ~15× token cost | VERIFIED (pre-cutoff primary; live re-check blocked) | Post says agents use ~4× more tokens than chat, and "multi-agent systems use about 15× more tokens than chats"; token usage explains ~80% of performance variance on BrowseComp | https://www.anthropic.com/engineering/built-multi-agent-research-system |
 | 5 | 2602.00496 junior over-trust | CORRECTED (live fetch) | Abstract: "novices struggle between over-reliance and cautious avoidance" — mis-calibration in both directions, small-N qualitative (10 juniors, 10 seniors) | https://arxiv.org/abs/2602.00496 |
@@ -24,9 +24,9 @@ Verdicts: **VERIFIED** (exact figure quoted from primary), **CORRECTED** (real f
 | 7 | Anthropic 47% debugging-skill drop | UNVERIFIABLE — do not cite | No primary Anthropic source found in round 1 (secondary blogs only) and none exists in model knowledge through Jan 2026; live confirmation sweep blocked | none found |
 | 8 | $47k LangChain loop; InfoQ $14k / $6.5k incidents | $47k: UNVERIFIABLE — do not cite. InfoQ pair: VERIFIED in round 1; re-check blocked | $47k appears only in two dev.to posts, no named company. InfoQ (July 2026): $14,000/day leaked-key Bedrock incident; DN42 autonomous-provisioning $6,531.30 (AWS negotiated to $1,894) | https://www.infoq.com/news/2026/07/ai-agents-billing-guardrails/ |
 | 9 | >4h agents ~90% higher total-failure risk | UNVERIFIABLE — do not cite (origin check blocked) | Round-1 already flags it as an unverified vendor number from industry-blog-grade sources (slavadubrov.github.io / appscale.blog / indium.tech); no primary study identified | see §9 |
-| 10 | 2606.01435 freshness +28 points | BLOCKED — do not cite until re-run | Post-cutoff paper; existence and the ~+28-point delta could not be confirmed during the outage | https://arxiv.org/abs/2606.01435 (unconfirmed) |
-| 11 | 2606.31498 protocol governance gaps | BLOCKED — do not cite until re-run | Post-cutoff paper; existence and the MCP/A2A/ACP gap list could not be confirmed during the outage | https://arxiv.org/abs/2606.31498 (unconfirmed) |
-| 12 | CAID +25.6% PaperBench | BLOCKED — do not cite until re-run | Post-cutoff paper; +25.6% / +14.7% figures and Geng & Neubig affiliation could not be confirmed during the outage | https://arxiv.org/abs/2603.21489 (unconfirmed) |
+| 10 | 2606.01435 freshness +28 points | CORRECTED (live fetch) | +28 points is the MULTI-HOP number vs HippoRAG-v2 on FactConsolidation; single-hop delta is +10.8 points on FC-SH (gpt-4o-mini) via candidate-extraction + max(serial) | https://arxiv.org/abs/2606.01435 |
+| 11 | 2606.31498 protocol governance gaps | CORRECTED — major | Paper exists (ID valid) but its six-dimension taxonomy is membership, deliberation, voting, dissent preservation, human escalation, audit/replay. Abstract does NOT claim protocols can't express budgets or delegation constraints | https://arxiv.org/abs/2606.31498 |
+| 12 | CAID +25.6% PaperBench | VERIFIED (live fetch) | "25.6% absolute improvement over single-agent baselines" on PaperBench; +14.7% on Commit0. Geng & Neubig; affiliations not shown on abs page (Neubig publicly CMU; no Anthropic evidence) | https://arxiv.org/abs/2603.21489 |
 
 ## Per-claim detail
 
@@ -37,12 +37,12 @@ Verdicts: **VERIFIED** (exact figure quoted from primary), **CORRECTED** (real f
 - **Conditions and baseline (from the repo's full-paper review, `research/papers/spark-to-fire/spark-to-fire.review.md`, status "reviewed-in-full (15 pp)", 2026-06-30):** the ≥89% spans the defense's three operating modes — Speed ~0.89 BICR (cost-aware), Balanced 0.93, Strict 0.94. Baselines (§VII): no-defense containment ≈2.2%; `no_blocking` ablation (detection without rollback) ≈3.1%. So the honest one-liner is: *governance with block+rollback contains 89–94% of runs depending on operating mode, vs ~2–3% without blocking* — detection alone does nothing; rollback/isolation is the active ingredient.
 - **Title/authors:** "From Spark to Fire: Modeling and Mitigating Error Cascades in LLM-Based Multi-Agent Collaboration," Xie, Zhu, Zhang, Zhu, Ye, Qi, Chen, Zhou (City Univ. of Macau + Minzu Univ.), v2 May 2026.
 
-### 2. SREGym (arXiv:2605.07161) — PARTIALLY VERIFIED
+### 2. SREGym (arXiv:2605.07161) — VERIFIED (full text)
 
 - **Claim as cited:** frontier agents at 38.9–72.6% diagnosis success on realistic SRE faults.
-- **Primary abstract (live fetch, 2026-07-29):** paper exists — "SREGym: A Live Benchmark for AI SRE Agents with High-Fidelity Failure Scenarios" (Clark, Su, Pial, Tian, Gniedziejko, Jacobsen, Chen, Xu). Abstract confirms "SREGym currently includes 90 realistic, challenging SRE problems" and that agents' "capabilities varies significantly in addressing different kinds of failures, with up to 40% differences in end-to-end results."
-- **Not confirmed:** the 38.9–72.6% diagnosis range, the 57.3–78.5% mitigation range, and which models — these are full-text results-table numbers; the full-text fetch was blocked by the outage.
-- **Cite as (safe today):** the abstract-level facts above. Keep the specific ranges flagged "abstract-unverified" in the spec until the results table is checked (action item below).
+- **Primary (abstract + full-text Table 3, fetched 2026-07-29):** "SREGym: A Live Benchmark for AI SRE Agents with High-Fidelity Failure Scenarios" (Clark, Su, Pial, Tian, Gniedziejko, Jacobsen, Chen, Xu). Abstract: "SREGym currently includes 90 realistic, challenging SRE problems"; capability "varies significantly in addressing different kinds of failures, with up to 40% differences in end-to-end results." Results (Table 3): "diagnosis success rates ranging from 38.9% to 72.6%" and "mitigation success rates ranging from 57.3% to 78.5%."
+- **Task definition / who was tested:** three agent scaffolds x model backends — Stratus (SRE-specific agent; Claude Sonnet-4.6 and Kimi K2.5), Claude Code (Sonnet-4.6), Codex (GPT-5.4). Diagnosis and mitigation are scored as separate task stages. Claude Code had the highest end-to-end success; Stratus + Sonnet-4.6 the highest mitigation rate.
+- **Cite as:** "on SREGym's 90 realistic SRE problems, frontier agent/model pairs diagnose at 38.9–72.6% and mitigate at 57.3–78.5% (Table 3)" — the mitigate-better-than-diagnose reading, and the approval-gates argument built on it, both hold.
 
 ### 3. MAST (arXiv:2503.13657) — VERIFIED; affiliation note corrected
 
@@ -83,28 +83,35 @@ Verdicts: **VERIFIED** (exact figure quoted from primary), **CORRECTED** (real f
 - **Origin:** round 1 (`notes/research-arxiv-multiagent-sdlc.md` §7) sourced the durability-practice consensus to three industry blogs (slavadubrov.github.io 2026-05-26; appscale.blog durable-execution piece; indium.tech "7 state persistence strategies") and explicitly tagged this one number "unverified vendor number." It appears in none of the arXiv material surveyed.
 - The outage blocked fetching the three blogs to pin down which one carries it and what THEY cite. Regardless of provenance hunt outcome, a vendor-blog risk multiplier with no methodology is not spec-grade: **do not cite the number**. The qualitative consensus (checkpoint + resume + heartbeats for long-running agents) is independently well-supported and is what the spec should lean on.
 
-### 10. arXiv:2606.01435 ("Don't Ask the LLM to Track Freshness") — BLOCKED — do not cite until re-run
+### 10. arXiv:2606.01435 ("Don't Ask the LLM to Track Freshness") — CORRECTED (precision)
 
-- Post-cutoff paper (June 2026); its existence, exact title, and the "~+28 points" delta for deterministic freshness resolution vs LLM adjudication could not be confirmed — every fetch attempt during this pass hit the classifier outage. Round 1 itself flags the 2606-series numbers as "abstract-level only, not deeply verified."
-- **Action:** re-run the abstract fetch; confirm the benchmark name and whether +28 is points of accuracy, and on which condition. Until then the spec may keep the *design principle* (resolve freshness deterministically in pipeline code; the supporting evidence base — Zep/Graphiti, FRESCO, temporal-RAG recency priors — is broader than this one paper) but not the +28 number.
+- **Claim as cited:** deterministic freshness resolution beats LLM adjudication by ~+28 points.
+- **Primary (live fetch, 2026-07-29):** paper exists — "Don't Ask the LLM to Track Freshness: A Deterministic Recipe for Memory Conflict Resolution" (Reddy & Challaram, submitted 2026-05-31). Core finding confirmed: "the bottleneck on conflict resolution is assembly (post-retrieval aggregation), not storage."
+- **Exact numbers:** "replacing the LLM-judgment answer pipeline with candidate-extraction plus Python max(serial) yields **+10.8 points on FC-SH** (gpt-4o-mini)"; the deterministic approach "**beats HippoRAG-v2 by +28 points**" on the **multi-hop** variant of the FactConsolidation benchmark.
+- **Correction for the spec:** "~+28 points" is real but it is the multi-hop-vs-HippoRAG-v2 comparison, not a blanket deterministic-vs-LLM delta; the like-for-like pipeline swap is +10.8 on single-hop. Cite as: "+10.8 points (single-hop) from swapping LLM adjudication for deterministic max(serial); up to +28 points vs HippoRAG-v2 on multi-hop FactConsolidation." The design principle (freshness resolution in deterministic pipeline code) is fully supported.
 
-### 11. arXiv:2606.31498 (governance gaps in MCP/A2A/ACP) — BLOCKED — do not cite until re-run
+### 11. arXiv:2606.31498 (governance gaps in MCP/A2A/ACP) — CORRECTED — major
 
-- Post-cutoff paper; existence and the exact claimed gap list (granular contextual permissions, constrained delegation chains, distributed audit, budgets/rate limits) could not be confirmed during the outage. Note also the ID's sequence number (31498) is unusually high for a monthly arXiv series — worth confirming the ID itself is transcribed correctly, not just the content.
-- **Action:** fetch the abs page; if the ID 404s, search the title "Governance Gaps in Agent Interoperability Protocols" (authors given in round 1 as Kang & Diponegoro). The differentiation argument in `00-research-summary.md` leans on this paper — it should not harden into the spec on an unconfirmed citation.
+- **Claim as cited (round 1 and `00-research-summary.md`):** the protocols "cannot express" granular contextual permissions, delegation chains with constrained sub-agent authority, distributed audit, computational/financial budgets and rate limits.
+- **Primary (live fetch, 2026-07-29):** paper exists and the ID is valid — "Governance Gaps in Agent Interoperability Protocols: What MCP, A2A, and ACP Cannot Express" (Kang & Diponegoro). But the abstract's actual taxonomy is **six governance dimensions: membership, deliberation, voting, dissent preservation, human escalation, and audit/replay** (applied across five protocols). Findings: "voting and dissent preservation are universally absent across all five protocols, deliberation is absent or at most partial"; gaps are classified as *extensible* (fixable via extensions) vs *structural* (needing new architectural layers).
+- **The abstract does NOT claim the protocols cannot express budgets or delegation constraints.** The round-1 gap list (budgets, rate limits, constrained delegation, granular permissions) appears to be an automated-reader artifact or conflation with another source — it is not supported by this paper's abstract.
+- **Consequence for the spec:** the D8/differentiation argument "bus-level governance because MCP/A2A/ACP can't express budgets" **must not cite this paper for the budget/delegation point**. What it CAN be cited for: audit/replay, human-escalation, and deliberation/dissent gaps in current interop protocols. The budget/delegation gap claim needs a different source (or should stand on the garden's own analysis, labeled as such). Flag `00-research-summary.md` line 35 and `research-arxiv-multiagent-sdlc.md` §4/§8.3 for rewording.
 
-### 12. arXiv:2603.21489 (CAID) — BLOCKED — do not cite until re-run
+### 12. arXiv:2603.21489 (CAID) — VERIFIED
 
-- Post-cutoff paper (March 2026, rev. July 2026); the +25.6% PaperBench / +14.7% Commit0 figures, the baseline they're measured against, and the author affiliation could not be confirmed during the outage.
-- **Affiliation note:** round 1 flagged that an automated summary attributed the authors to Anthropic while Neubig is publicly at CMU. This check is still owed. (The MAST/Neubig confusion in item 3 is resolved: Neubig has nothing to do with MAST.)
-- **Action:** fetch the abs page; confirm figures, whether +25.6% is absolute or relative, the baseline (single synchronous agent? no-isolation delegation?), and affiliations.
+- **Claim as cited:** +25.6% PaperBench via git worktrees + branch-and-merge.
+- **Primary (live fetch, 2026-07-29):** "Effective Strategies for Asynchronous Software Engineering Agents," Jiayi Geng & Graham Neubig. CAID confirmed: "constructs dependency-aware task plans through a central manager, executes subtasks concurrently in isolated workspaces, and consolidates progress via structured integration with executable test-based verification."
+- **Numbers:** **25.6% absolute improvement over single-agent baselines on PaperBench** (paper reproduction); **+14.7% on Commit0** (Python library development). Baseline = single-agent.
+- **Affiliations:** not shown on the abs page; Neubig is publicly CMU. No evidence for the "Anthropic" attribution in the round-1 automated summary — treat that as an artifact and drop it.
 
-## Outstanding re-run list (blocked by 2026-07-29 tool outage)
+## Remaining spot-checks (low priority; verdicts above do not depend on them)
 
-1. SREGym full text — confirm 38.9–72.6% diagnosis / 57.3–78.5% mitigation and model names.
-2. arXiv 2606.01435 — existence + exact +28-point delta + benchmark.
-3. arXiv 2606.31498 — existence (check ID) + exact gap list.
-4. arXiv 2603.21489 — +25.6%/+14.7% + baseline + affiliations.
-5. Spot-check exact 15×/80% sentence wording on the live Anthropic post; exact 19%/20% wording on the live METR post.
-6. Fresh fetch of the InfoQ billing-guardrails article to re-confirm the $14k/$6.5k details.
-7. Post-Jan-2026 search sweep for any primary behind "Anthropic 47%" (expected result: none) and for the origin of the ">4h/90%" vendor number.
+1. Exact 15×/80% sentence wording on the live Anthropic post, and exact 19%/20% wording on the live METR post (both verdicts rest on pre-cutoff knowledge of the primary; wording should be confirmed before verbatim external quoting).
+2. Fresh fetch of the InfoQ billing-guardrails article to re-confirm the $14k/$6.5k incident details (round-1 live verification stands).
+3. Post-Jan-2026 search sweep for any primary behind "Anthropic 47%" (expected: none) and for the origin of the ">4h/90%" vendor number (both remain do-not-cite regardless).
+
+## Corpus follow-ups triggered by this pass
+
+- Reword `00-research-summary.md` (line 35, §"Differentiation thesis") and `notes/research-arxiv-multiagent-sdlc.md` §4/§8.3: arXiv 2606.31498 does not support the "cannot express budgets/delegation constraints" claim (item 11).
+- Soften junior-over-trust phrasing wherever 2602.00496 is cited (`00-research-summary.md` item 6, `reports/hci-for-agents.md`, `reports/agents-for-planning-slicing.md`): "trust mis-calibration in both directions," small-N qualitative (item 5).
+- The "~+28 points" freshness figure should be quoted with its conditions (item 10) in `reports/reducing-cognitive-debt.md`, `reports/hci-for-agents.md`, `reports/agents-for-planning-slicing.md`, `notes/research-emergent-1.md`.

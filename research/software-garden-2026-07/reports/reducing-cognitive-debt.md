@@ -87,7 +87,7 @@ The staleness deep-dive (`scratchpad/notes/research-emergent-1.md`) supplies the
 - **Age-stamp every answer**: render provenance (entries used, verified dates, drift status) in the answer itself.
 - **Derive, don't quote**: anything recomputable (git status, deploy versions, pod health) is recomputed at answer time; the KB stores only non-derivable knowledge (decisions, rationale) plus derivation pointers. This single rule would have prevented the mahdi incident outright.
 - **Deterministic staleness gates with tiered behavior**: fresh → answer with stamp; past TTL → warning banner; badly stale on critical topics → refuse to answer authoritatively, emit the verification command instead.
-- **Don't ask the LLM to track freshness**: deterministic freshness resolution beats LLM adjudication by ~+28 points ([arXiv 2606.01435](https://arxiv.org/abs/2606.01435)); model-internal confidence misses stale-context failures.
+- **Don't ask the LLM to track freshness**: deterministic freshness resolution beats LLM adjudication by +10.8 points like-for-like (FC-SH; the +28 figure is vs HippoRAG-v2 on multi-hop only — precision-corrected 2026-07-29) ([arXiv 2606.01435](https://arxiv.org/abs/2606.01435)); model-internal confidence misses stale-context failures.
 - **Supersede, never overwrite, decisions** (Graphiti bi-temporal model): current vs historical is a metadata query, not an LLM judgment.
 
 ### 2.5 The oversight surface as a cognitive-load problem
