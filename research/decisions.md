@@ -77,6 +77,41 @@ countermeasures (topic 12) fold into R1 tickets.
 
 ---
 
+## D12 — Attestations v1: agents attest results as atomic claims; validation is per-attestation against a runner-captured evidence ledger  (Terra, 2026-07-29 — refines D11.2)
+
+**Terra's requirement:** "we need attestations from agents about their results — so
+that we can validate attestations... the concern: catching agent hallucinations."
+
+**Decision:** R1 ships a **thin claims substrate**:
+1. **Attest, don't extract.** Every RESULT must carry structured **attestations** —
+   atomic claims `{id, statement, kind, evidence_refs[]}` — enforced as the
+   report-back schema (structured output). The full spec's bus-side decomposer existed
+   to extract claims from uncooperative free text; v1 controls the schema, so
+   extraction machinery is unnecessary. (D1's "agent self-declares claims +
+   provenance" half, kept.)
+2. **The evidence ledger is runner-captured, never agent-authored.** Tool results,
+   exit codes, diffs, probe outputs are recorded as events by the runner (hooks) —
+   mechanical provenance. Agents cannot forge the ledger they're checked against.
+   (D7's core insight — the audited party must not author the record the auditor
+   samples — in v1 form.)
+3. **Validation is per-attestation, cheapest-first:** deterministic checks where the
+   claim kind allows (does the ref dereference? does the exit code match? does the
+   diff exist?) — these are hallucination-*proof*; model entailment for the rest —
+   hallucination-*resistant*; and the automatic rule: **an attestation with no
+   dereferenceable evidence ref is UNSUPPORTED, no model call needed** — which
+   mechanically catches the dominant hallucination shapes (phantom test runs,
+   fabricated files, invented deploys).
+4. **Trust semantics survive:** only CONFIRMED attestations compose into downstream
+   spawn briefs by default; UNSUPPORTED results reach the junior flagged and cannot
+   be approved without a logged, reason-coded override.
+5. **Verifier fallibility is handled by the loop, not by more verifiers:** sampled
+   audits + the GP8 eval loop catch verifier misses over time (eventual consistency),
+   rather than "who verifies the verifier" infrastructure in v1.
+
+**Still deferred** (reference bank): free-text decomposition, triage classifier,
+compacted confirmed projections at scale, global contradiction checking, rewind
+machinery.
+
 ## D11 — Greenwood is an idea source, not the deliverable  (Terra, 2026-07-29)
 
 **Decision:** "We don't need to ship Greenwood as spec'd — we just want the ideas of

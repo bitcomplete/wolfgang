@@ -106,19 +106,33 @@ Refs: D11.1, D8 (reference), F.4.
   failure; sampled audit of delivered messages (measured false-green rate).
   ✂ demotes to log-only (screen advisory, not blocking).
 
-## GP5 — Verification v1: evidence-checked report-back (the D1 idea, pragmatic) · R1b
-Refs: D11.2, arXiv note (grounded-verifier findings), planning report R-slice contract.
+## GP5 — Attestations & verification v1 (the D1/D7 ideas, pragmatic; D12) · R1b
+Refs: D12, D11.2, arXiv note (grounded-verifier findings), planning report slice contract.
 
 - **G5.1 — Slice contract as spawn schema.** Scope: Why/Scope/Acceptance-with-
   verification-command/Deps/Tier/Budget/Rollback — every task brief carries it.
   Acceptance: runner refuses a brief without falsifiable acceptance.
-- **G5.2 — Verifier pass on completion.** Scope: separate model call (fresh context)
-  checks claimed outcomes against evidence — tests run, diffs, logs, live probes;
-  verdict CONFIRMED/UNSUPPORTED/FAILED as an event; evidence-anchored only (delayed/
-  ungrounded correction destabilizes — arXiv 2606.27409). Acceptance: a planted false
-  "done" is flagged UNSUPPORTED before the junior sees the card.
-- **G5.3 — Result cards render the verdict** + evidence links; UNSUPPORTED results
-  can't be approved without explicit override (logged, reason-coded).
+- **G5.2 — Attestation schema (attest, don't extract).** Scope: RESULT messages must
+  carry atomic attestations {id, statement, kind: test-passed|file-changed|deploy-done|
+  probe-observed|inference, evidence_refs[]} as enforced structured output; a result
+  with zero attestations is rejected mechanically. Acceptance: schema round-trip;
+  free-prose-only result bounces back to the agent.
+- **G5.3 — Evidence ledger (mechanical provenance).** Scope: runner captures tool
+  results, exit codes, diffs, probe outputs as events via hooks — agents cannot write
+  the ledger they are checked against (D7's insight, v1 form). Acceptance: an agent
+  claiming an un-run test has no matching ledger entry, provably.
+- **G5.4 — Per-attestation verifier, cheapest-first.** Scope: deterministic checks by
+  kind (ref dereferences, exit code matches, diff exists) — hallucination-proof; model
+  entailment (fresh context) only for inference-kind claims — hallucination-resistant;
+  automatic rule: **no dereferenceable evidence ref ⇒ UNSUPPORTED, zero model calls**;
+  per-attestation verdict events (evidence-anchored only — ungrounded correction
+  destabilizes, arXiv 2606.27409). Acceptance: planted phantom-test, fabricated-file,
+  and false-inference attestations are each flagged before the junior sees the card.
+- **G5.5 — Verdicts govern composition + approval.** Scope: result cards render
+  per-attestation verdicts + evidence links; spawn briefs compose from CONFIRMED
+  attestations only by default (unconfirmed require explicit, flagged inclusion);
+  UNSUPPORTED results can't be approved without a logged, reason-coded override;
+  sampled audit of CONFIRMED verdicts feeds GP8 (verifier misses become eval cases).
 
 ## GP6 — Operator surface (P11) · R1a→R1b
 Refs: C, cognitive-debt + hci reports, topic 12 §1-3.
