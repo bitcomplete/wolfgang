@@ -77,7 +77,45 @@ countermeasures (topic 12) fold into R1 tickets.
 
 ---
 
-## D12 — Attestations v1: agents attest results as atomic claims; validation is per-attestation against a runner-captured evidence ledger  (Terra, 2026-07-29 — refines D11.2)
+## D13 — Mostly autopilot: autonomy by environment, release-engineering guardrails, app modes  (Terra, 2026-08-01 — reframes R1's autonomy stance)
+
+**Terra's ruling:** the garden is **mostly autopilot**, made safe by release
+engineering rather than per-action human approvals: **canary releases, ringed
+deployment (risk-gated), continuous deployment, preview environments, environment
+promotion**. **Prod deploys are human-gated.** Each agent assumes — and depends on —
+the app having **ephemeral dev environments**. Operations are standardized across all
+apps that run this way; standardization work happens in **sprint/build mode**; **run
+mode depends on standardization**; non-standard apps require a **standardize mode**
+before they can join run mode.
+
+**Design consequences:**
+1. **The tier matrix reinterprets spatially: environment = risk tier.** Below prod
+   (ephemeral, dev, preview, canary rings) agents operate autonomously — blast radius
+   is contained by construction, promotion between rings is gated by *automated*
+   verification (tests, canary metrics, conformance, attestation verdicts). The human
+   gate concentrates at **prod promotion** plus the standing irreversibles (data
+   mutation, secrets, tier-4 actions); incident/break-glass mode is unchanged.
+2. **The junior's job changes shape:** from approving actions to supervising
+   promotions and exceptions — reviewing ring health, promoting to prod from evidence
+   cards, handling incidents. The approval-fatigue math improves: gates fire per
+   *release*, not per action.
+3. **Ephemeral dev environments become a hard R1 dependency per run-mode app** —
+   bc-prod's preview-environment machinery (kploy `preview:` config) is the existing
+   substrate to build on.
+4. **App lifecycle modes are a first-class registry: `standardize | build | run`.**
+   Run-mode eligibility = App Operations Contract conformance (patrol-verified,
+   including ephemeral/preview env support). Standardize mode is itself agent-assisted
+   work. Apps not conformant by Aug 16 ship in standardize mode — an honest partial
+   release.
+5. **Tension with the co-pilot evidence, resolved structurally:** the 2025-26 findings
+   (8% run agents in prod; co-pilot preference; SREGym diagnosis rates) warn against
+   *unstructured* autonomy in prod. D13's answer is that autonomy lives below prod
+   behind automated promotion gates, and humans hold exactly the gate the evidence
+   says they must — irreversible world impact. Enforcement stays structural
+   (environments, credentials, pipelines), never instructional.
+
+**Supersedes:** R1's "co-pilot, not autopilot" stance (the 2026-07-29 framing) and the
+per-action reading of the T1–T4 matrix for below-prod work. agents attest results as atomic claims; validation is per-attestation against a runner-captured evidence ledger  (Terra, 2026-07-29 — refines D11.2)
 
 **Terra's requirement:** "we need attestations from agents about their results — so
 that we can validate attestations... the concern: catching agent hallucinations."

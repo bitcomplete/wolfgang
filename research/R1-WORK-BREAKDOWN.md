@@ -12,14 +12,20 @@ summary: The Aug-16 garden v1 decomposed into buildable units. Frame - junior en
 
 # R1 Work Breakdown — Software Garden v1 (ship 2026-08-16)
 
-**Goal (decisions.md R1):** the junior can supervise agent-assisted operations of the
-4-5 apps — see status, approve/deny risky actions from evidence, resume/kill agents,
-declare incidents, stay within cost visibility — without senior attention on the
-happy path. Single-user pilot (D10). Every safety default on (topic 12 §4).
+**Goal (decisions.md R1 + D13):** agents operate the 4-5 apps **mostly autopilot**,
+made safe by release engineering — ephemeral dev envs, preview envs, canary +
+ringed deployment, continuous deployment, environment promotion — with the human
+gate concentrated at **prod promotion** and standing irreversibles. The junior
+supervises promotions and exceptions: reviews ring health, promotes to prod from
+evidence cards, resumes/kills agents, declares incidents, watches cost. Single-user
+pilot (D10). Every safety default on (topic 12 §4).
 
-**Design stance (D11):** Greenwood ideas, pragmatic bodies. Event sourcing stays the
-spine (P0) on a swappable log (D9). No claims substrate, no Kafka, no multi-harness,
-no new UI applications — compose Slack/pin/bithub/kploy.
+**Design stance (D11/D13):** Greenwood ideas, pragmatic bodies. Event sourcing stays
+the spine (P0) on a swappable log (D9). Autonomy is granted by environment, not
+per-action approval (D13): below-prod rings are autonomous behind automated gates.
+Apps carry a lifecycle mode — **standardize | build | run** — and run mode requires
+contract conformance. No claims substrate, no Kafka, no multi-harness, no new UI
+applications — compose Slack/pin/bithub/kploy.
 
 **Milestone gates:**
 - **R1a — Rails floor (Aug 8):** gates + rails + incident mode live on one app.
@@ -67,7 +73,10 @@ Refs: D10, B.1, cost note.
   "is this normal?" vs baseline (B.11 anchors). ✂ demotes to daily digest number.
 
 ## GP3 — Gates, approvals & incident mode · R1a
-Refs: DC-1/2/3/8/9/11, F, H, A.4.
+Refs: DC-1/2/3/8/9/11, F, H, A.4. **D13 note:** gates concentrate at prod promotion +
+standing irreversibles (data mutation, secrets, T4); below-prod rings pass automated
+gates only (GP10). The Cedar engine, approval aggregate, and evidence cards below are
+unchanged — they just fire per *release/irreversible*, not per action.
 
 - **G3.1 — Tier policy engine (Cedar) at the tool boundary.** Scope: T1-T4 matrix as
   Cedar policies, default-deny, params in context; tier law = min(agent ceiling,
@@ -146,9 +155,17 @@ Refs: C, cognitive-debt + hci reports, topic 12 §1-3.
   tiers (dbt warn_after/error_after shape, C.4); derive-don't-quote for anything
   recomputable. Acceptance: mahdi-style 7-week-stale answer is impossible by
   construction (stamp or refusal).
-- **G6.4 — App Operations Contract + onboarding the 4-5 apps:** kploy-only deploys,
-  bc-prod.yaml provisioning, sealed secrets, /healthz+/readyz+/metrics, card+runbook
-  present. Acceptance: conformance check green per app (feeds GP7).
+- **G6.4 — App Operations Contract + app-mode registry (D13):** contract = kploy-only
+  deploys, bc-prod.yaml provisioning, sealed secrets, /healthz+/readyz+/metrics,
+  card+runbook present, **ephemeral dev env + preview env support (kploy `preview:`)**,
+  canary-capable deploy config. App mode (`standardize|build|run`) is an event-sourced
+  registry field; **run-mode entry = conformance green (patrol-verified)**.
+  Acceptance: each app has a mode; each run-mode app is fully conformant; a
+  non-conformant app is mechanically barred from run mode.
+- **G6.4b — Standardize mode as agent-assisted onboarding:** per-app gap report
+  (contract diff) → agent-executed standardization briefs (build-mode work, normal
+  gates) → re-check → promote to run mode. Acceptance: ≥2 apps reach run mode by
+  Aug 16; remaining apps have gap reports and live standardize briefs.
 - **G6.5 — Close-out notes, workflow-enforced** (one line, at completion; feeds GP8).
 
 ## GP7 — Patrol v1 (DC-13 charter) · R1b
@@ -184,6 +201,30 @@ Refs: topic 13, DC-12, P9 (reference).
 - **G8.5 — Policy-evidence register:** approve/deny/break-glass history per
   action-type — the evidence base for tier promotion/demotion proposals (ITIL
   standard-change mechanism). Recalibration is Terra-approved, event-logged.
+
+## GP10 — Environments, rings & promotion (D13) · R1a→R1b
+Refs: D13, bc-prod preview-environments skill, kploy canary/auto-rollback.
+
+- **G10.1 — Ring definition as versioned policy:** ephemeral → preview → canary →
+  prod; per-ring autonomy (below-prod: autonomous; prod: human-gated) and per-ring
+  automated gate criteria (tests green, attestations CONFIRMED, canary metrics,
+  conformance). Acceptance: rings are config-as-events; a ring change is auditable.
+- **G10.2 — Ephemeral dev environments per run-mode app.** Why: D13 — every agent
+  assumes one. Scope: on-demand create/destroy via the kploy preview machinery (or
+  compose-based local equivalent where preview isn't feasible); TTL'd, seeded,
+  credential-scoped to the sandbox. Acceptance: an agent brief can request an env,
+  get it <5 min, and its destruction is automatic.
+- **G10.3 — Promotion pipeline as events:** PromotionRequested/Gated/Approved/
+  Completed per ring transition; automated gates emit evidence (test runs, canary
+  read); **prod promotion requires the GP3 human approval card** (evidence = the
+  accumulated ring record). Acceptance: an agent-built change flows ephemeral→
+  preview→canary autonomously and stops at prod awaiting the junior.
+- **G10.4 — Canary + auto-rollback on prod:** kploy canary config per run-mode app;
+  post-promotion verification window with automatic rollback on regression
+  (manufactured reversibility — demotes prod-deploy risk). Acceptance: a seeded bad
+  release auto-rolls-back without human action; the event record shows why.
+  ✂ canary demotes to staged-percentage manual check where kploy config doesn't
+  support it yet.
 
 ## GP9 — Pilot readiness · R1c
 - **G9.1 — Week-one protections:** patrol strikes armed, approval queue budget
