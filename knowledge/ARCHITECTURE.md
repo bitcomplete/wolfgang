@@ -1,5 +1,12 @@
 # Greenwood — Architecture
 
+> **STATUS: REFERENCE, not current design (as of 2026-08-01).** Per **D11**
+> (2026-07-29), Greenwood is an *idea source*, not the deliverable — and per **D9**
+> Kafka has been scrapped in favor of a swappable log (Postgres first). This document
+> describes the full Kafka-era spec and remains the parts bank for when its problems
+> become real. **For the current design, start at `garden/00-overview.md`**; for what
+> R1 actually ships, see `../research/R1-WORK-BREAKDOWN.md`.
+
 Greenwood is an event-sourced agent runtime and coordination bus on Kafka. Every action
 an agent takes is an immutable event; all state is derived by replaying the log. It exists to run
 many LLM agents reliably: resume them across host failures without losing prompt cache,
