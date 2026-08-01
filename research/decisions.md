@@ -77,6 +77,39 @@ countermeasures (topic 12) fold into R1 tickets.
 
 ---
 
+## D14 — The human engagement model: autonomous inner loop, humans at meaning boundaries  (Terra, 2026-08-01 — completes D13)
+
+**Terra's ruling:** development, research, QA, optimization, and user testing are
+**fully autonomous**. Copilot engagement happens at the places humans ensure good
+outcomes: **system design review (to reduce cognitive debt), feature demos, client
+meetings**, and other human engagement with the autonomous parts — plus **drop-in AI
+pair programming** for a tricky or important feature.
+
+**The principle:** humans engage at *meaning* boundaries — comprehension, client
+value, judgment — not mechanical ones. Mechanical assurance is the pipeline's job
+(D13 rings + automated gates + attestation verification); human assurance is about
+understanding the system and steering outcomes.
+
+**Design consequences:**
+1. **The autonomous inner loop is the whole SDLC below prod**: agents research, build,
+   QA, optimize, and user-test (automated/synthetic user testing in preview envs is a
+   ring-gate input) without human involvement.
+2. **Design review is the anti-cognitive-debt mechanism** (ties directly to the
+   cognitive-debt report): significant changes produce a reviewable design delta —
+   what changed, why, what it costs to understand — on a human cadence. Its purpose is
+   keeping the humans' mental model current (comprehension debt is the #1 documented
+   agent-era debt), not approving mechanics.
+3. **Feature demos are outcome verification at the human level**: completed features
+   auto-generate a demo (in their preview env) that a human accepts or redirects —
+   trust calibration through observed behavior, not report reading.
+4. **Client-facing surfaces** (meetings, release notes, status) are human-fronted,
+   garden-supplied: materials derive from close-outs, attestations, and the event log.
+5. **Pair-mode drop-in**: any brief can be joined interactively (the pilot harness is
+   Claude Code, so pair programming is native) — a human pulls a tricky/important
+   feature into an interactive session with the garden's context loaded, then hands
+   back to autonomous mode. Entry/exit are events; the work stays on the same rails.
+6. Prod promotion (D13) and incident response remain the operational human gates.
+
 ## D13 — Mostly autopilot: autonomy by environment, release-engineering guardrails, app modes  (Terra, 2026-08-01 — reframes R1's autonomy stance)
 
 **Terra's ruling:** the garden is **mostly autopilot**, made safe by release

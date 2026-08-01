@@ -20,12 +20,15 @@ supervises promotions and exceptions: reviews ring health, promotes to prod from
 evidence cards, resumes/kills agents, declares incidents, watches cost. Single-user
 pilot (D10). Every safety default on (topic 12 §4).
 
-**Design stance (D11/D13):** Greenwood ideas, pragmatic bodies. Event sourcing stays
-the spine (P0) on a swappable log (D9). Autonomy is granted by environment, not
-per-action approval (D13): below-prod rings are autonomous behind automated gates.
-Apps carry a lifecycle mode — **standardize | build | run** — and run mode requires
-contract conformance. No claims substrate, no Kafka, no multi-harness, no new UI
-applications — compose Slack/pin/bithub/kploy.
+**Design stance (D11/D13/D14):** Greenwood ideas, pragmatic bodies. Event sourcing
+stays the spine (P0) on a swappable log (D9). Autonomy is granted by environment, not
+per-action approval (D13): below-prod rings are autonomous behind automated gates, and
+the inner loop — development, research, QA, optimization, user testing — is fully
+autonomous (D14). Humans engage at meaning boundaries: design review (cognitive debt),
+feature demos, client surfaces, prod promotion, incidents, and drop-in pair
+programming for tricky features. Apps carry a lifecycle mode — **standardize | build |
+run** — and run mode requires contract conformance. No claims substrate, no Kafka, no
+multi-harness, no new UI applications — compose Slack/pin/bithub/kploy.
 
 **Milestone gates:**
 - **R1a — Rails floor (Aug 8):** gates + rails + incident mode live on one app.
@@ -208,7 +211,8 @@ Refs: D13, bc-prod preview-environments skill, kploy canary/auto-rollback.
 - **G10.1 — Ring definition as versioned policy:** ephemeral → preview → canary →
   prod; per-ring autonomy (below-prod: autonomous; prod: human-gated) and per-ring
   automated gate criteria (tests green, attestations CONFIRMED, canary metrics,
-  conformance). Acceptance: rings are config-as-events; a ring change is auditable.
+  conformance, automated user-testing results in preview — D14.1). Acceptance: rings
+  are config-as-events; a ring change is auditable.
 - **G10.2 — Ephemeral dev environments per run-mode app.** Why: D13 — every agent
   assumes one. Scope: on-demand create/destroy via the kploy preview machinery (or
   compose-based local equivalent where preview isn't feasible); TTL'd, seeded,
@@ -225,6 +229,31 @@ Refs: D13, bc-prod preview-environments skill, kploy canary/auto-rollback.
   release auto-rolls-back without human action; the event record shows why.
   ✂ canary demotes to staged-percentage manual check where kploy config doesn't
   support it yet.
+
+## GP11 — Human engagement surfaces (D14) · R1b→R1c
+Refs: D14, cognitive-debt report (comprehension debt), hci report (trust calibration).
+
+- **G11.1 — Design-review packet.** Scope: significant changes (new dependency,
+  schema/API change, cross-app pattern, security surface) auto-produce a design delta
+  — what changed / why / what it costs to understand / alternatives rejected — queued
+  to a weekly human design review; review outcomes land as events (accept / redirect
+  brief / ADR). Acceptance: a week of autonomous work is reviewable in <30 min and
+  produces a current mental model (the cognitive-debt test: does this reduce what the
+  human must hold, or add to it?).
+- **G11.2 — Feature demo generation.** Scope: a completed feature auto-generates a
+  demo — script + walkthrough (recording where feasible) running in its preview env —
+  delivered as a card; human accepts or redirects; acceptance/redirect are Feedback
+  events (GP8). Acceptance: demo card → decision loop works end-to-end; a redirect
+  becomes a new brief with provenance.
+- **G11.3 — Pair-mode drop-in.** Scope: join any queued/running brief as an
+  interactive Claude Code session with the garden context loaded (slice contract,
+  attestation history, relevant events); entry/exit are events; work continues on the
+  same branch/rails; hand-back resumes autonomous mode. Acceptance: a human can pull a
+  brief, pair on it, and hand back without losing event-log continuity.
+- **G11.4 — Client-facing materials.** Scope: release notes / status summaries
+  derived from close-outs, attestations, and promotions (human-edited before sending —
+  client surfaces are human-fronted per D14). Acceptance: a sprint's release notes
+  draft generates from the log alone. ✂ demotes to manual with a log query.
 
 ## GP9 — Pilot readiness · R1c
 - **G9.1 — Week-one protections:** patrol strikes armed, approval queue budget
