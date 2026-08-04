@@ -37,9 +37,16 @@ summary: The live open queue. A navigator answer touching any of these must say 
   silently.
 
 ## Proposed R1 schema tweaks from the 2026-08-03 ideation (topic 14, pending Terra)
-- UNEXPECTED_FINDING / replan message kind; attestation refs may reference other
-  attestations (compositional drill-down); golden-signal names in rollback criteria;
+- UNEXPECTED_FINDING / replan message kind; golden-signal names in rollback criteria;
   user-journey registry in the App Operations Contract (R1-if-cheap).
+  (~~Compositional attestation refs~~ — decided into D16.)
+
+## New opens from D15/D16/D17 (2026-08-03)
+- Which external model lineages to onboard for review (GLM/Kimi/GPT/…), verdicts per
+  gate, and their cost envelope (D15 — fresh-context Claude review is the R1 floor).
+- Completeness-contract v1 contents per attestation type (PR/feature/release/deploy).
+- Promotion mechanism: one-tap-on-green vs promote-on-green-with-veto-window
+  (recommended: one-tap in R1, graduate per app via the policy-evidence register).
 
 ## Watch items
 - Buzz's `buzz-workflow` approval-gate roadmap (overlap grows if it ships ops

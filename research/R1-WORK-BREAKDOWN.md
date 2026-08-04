@@ -124,22 +124,33 @@ Refs: D12, D11.2, arXiv note (grounded-verifier findings), planning report slice
 - **G5.1 — Slice contract as spawn schema.** Scope: Why/Scope/Acceptance-with-
   verification-command/Deps/Tier/Budget/Rollback — every task brief carries it.
   Acceptance: runner refuses a brief without falsifiable acceptance.
-- **G5.2 — Attestation schema (attest, don't extract).** Scope: RESULT messages must
-  carry atomic attestations {id, statement, kind: test-passed|file-changed|deploy-done|
-  probe-observed|inference, evidence_refs[]} as enforced structured output; a result
-  with zero attestations is rejected mechanically. Acceptance: schema round-trip;
-  free-prose-only result bounces back to the agent.
+- **G5.2 — Attestation schema (attest, don't extract; D16).** Scope: RESULT messages
+  must carry atomic attestations {id, statement, kind: test-passed|file-changed|
+  deploy-done|probe-observed|inference, evidence_refs[]} as enforced structured
+  output; refs may reference **other attestations** (compositional tree); a result
+  with zero attestations is rejected mechanically. **Typed component attestations
+  (PR, feature, release, deploy) carry completeness contracts** — required child
+  kinds, versioned as policy events; missing child ⇒ INCOMPLETE (distinct verdict
+  from UNSUPPORTED); leaves are truth-checked only. Acceptance: schema round-trip;
+  free-prose-only result bounces; a PR attestation missing its test-run child is
+  INCOMPLETE deterministically.
 - **G5.3 — Evidence ledger (mechanical provenance).** Scope: runner captures tool
   results, exit codes, diffs, probe outputs as events via hooks — agents cannot write
   the ledger they are checked against (D7's insight, v1 form). Acceptance: an agent
   claiming an un-run test has no matching ledger entry, provably.
-- **G5.4 — Per-attestation verifier, cheapest-first.** Scope: deterministic checks by
-  kind (ref dereferences, exit code matches, diff exists) — hallucination-proof; model
-  entailment (fresh context) only for inference-kind claims — hallucination-resistant;
-  automatic rule: **no dereferenceable evidence ref ⇒ UNSUPPORTED, zero model calls**;
-  per-attestation verdict events (evidence-anchored only — ungrounded correction
-  destabilizes, arXiv 2606.27409). Acceptance: planted phantom-test, fabricated-file,
-  and false-inference attestations are each flagged before the junior sees the card.
+- **G5.4 — Per-attestation verifier, cheapest-first, independent (D15).** Scope:
+  deterministic checks by kind (ref dereferences, exit code matches, diff exists) —
+  hallucination-proof; model entailment only for inference-kind claims —
+  hallucination-resistant; automatic rules: **no dereferenceable evidence ref ⇒
+  UNSUPPORTED, zero model calls**; completeness-contract check ⇒ INCOMPLETE (G5.2).
+  **Reviewer independence:** the verifier is never the producing agent/session;
+  minimum fresh-context different instance; **different model lineage preferred**
+  where wired (external-API reviewers with own rails/cost tags); verdict events
+  record reviewer principal + lineage. Per-attestation verdicts, evidence-anchored
+  only (ungrounded correction destabilizes, arXiv 2606.27409). Acceptance: planted
+  phantom-test, fabricated-file, and false-inference attestations each flagged before
+  the junior sees the card; a verdict authored by the producing session is rejected
+  by the fold.
 - **G5.5 — Verdicts govern composition + approval.** Scope: result cards render
   per-attestation verdicts + evidence links; spawn briefs compose from CONFIRMED
   attestations only by default (unconfirmed require explicit, flagged inclusion);
@@ -211,18 +222,25 @@ Refs: D13, bc-prod preview-environments skill, kploy canary/auto-rollback.
 - **G10.1 — Ring definition as versioned policy:** ephemeral → preview → canary →
   prod; per-ring autonomy (below-prod: autonomous; prod: human-gated) and per-ring
   automated gate criteria (tests green, attestations CONFIRMED, canary metrics,
-  conformance, automated user-testing results in preview — D14.1). Acceptance: rings
-  are config-as-events; a ring change is auditable.
+  conformance, automated user-testing results in preview — D14.1; typed component
+  attestations complete per D16, with test/instrument changes reviewed by an
+  independent-lineage agent per D15). Acceptance: rings are config-as-events; a ring
+  change is auditable.
 - **G10.2 — Ephemeral dev environments per run-mode app.** Why: D13 — every agent
   assumes one. Scope: on-demand create/destroy via the kploy preview machinery (or
   compose-based local equivalent where preview isn't feasible); TTL'd, seeded,
   credential-scoped to the sandbox. Acceptance: an agent brief can request an env,
   get it <5 min, and its destruction is automatic.
-- **G10.3 — Promotion pipeline as events:** PromotionRequested/Gated/Approved/
+- **G10.3 — Promotion pipeline as events (D17):** PromotionRequested/Gated/Approved/
   Completed per ring transition; automated gates emit evidence (test runs, canary
-  read); **prod promotion requires the GP3 human approval card** (evidence = the
-  accumulated ring record). Acceptance: an agent-built change flows ephemeral→
-  preview→canary autonomously and stops at prod awaiting the junior.
+  read, D16 completeness verdicts, D15 independent-review verdicts). **Prod promotion
+  is green-by-construction**: the pipeline promotes when mechanically green; the
+  junior's card is system-level (green/not-green + exceptions, one tap — never a
+  diff review); non-green routes to the junior as an exception. R1 mechanism:
+  one-tap-on-green; graduation to promote-on-green-with-veto-window per app via the
+  policy-evidence register (pending Terra). Acceptance: an agent-built change flows
+  ephemeral→preview→canary autonomously; a green release promotes with ≤1 junior
+  action and zero detail reading; a non-green release cannot auto-promote.
 - **G10.4 — Canary + auto-rollback on prod:** kploy canary config per run-mode app;
   post-promotion verification window with automatic rollback on regression
   (manufactured reversibility — demotes prod-deploy risk). Acceptance: a seeded bad

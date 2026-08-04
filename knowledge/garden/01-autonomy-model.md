@@ -26,9 +26,13 @@ boundaries.
   ring transition passes **automated** gates: tests green, attestations CONFIRMED
   (see [[02-trust-attestations]]), canary metrics, conformance, automated
   user-testing results from preview.
-- **Prod promotion: human-gated.** The junior promotes from an evidence card carrying
-  the accumulated ring record. Canary + auto-rollback manufactures reversibility on
-  the prod side.
+- **Prod promotion: green-by-construction, system-level human gate (D17,
+  2026-08-03).** Release engineering owns promotion: the pipeline promotes when
+  mechanically green (release attestation COMPLETE per D16, independent review
+  verdicts per D15, canary armed). The junior handles **the system, never the
+  details** — a one-tap system-level card; exceptions and non-green releases route to
+  them; a promotion card requiring diff-reading is a design bug. Canary +
+  auto-rollback manufactures reversibility on the prod side.
 - **Standing irreversibles stay human-gated regardless of ring:** data mutation,
   secrets, tier-4 (two-person) actions.
 - Every agent **assumes and depends on** the app having ephemeral dev environments —

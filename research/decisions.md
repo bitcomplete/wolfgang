@@ -77,6 +77,84 @@ countermeasures (topic 12) fold into R1 tickets.
 
 ---
 
+## D17 — Release engineering owns prod promotion; the junior supervises the system, never the details  (Terra, 2026-08-03 — refines D13's human gate)
+
+**Terra's ruling:** "we need release engineering to handle prod promotion so the one
+junior is just handling the system, never the details."
+
+**Design:**
+- **Green-by-construction promotion:** the release pipeline promotes to prod when a
+  release is mechanically green — typed release attestation COMPLETE (D16), all
+  children verified by independent reviewers (D15), canary staged with auto-rollback
+  armed, golden-signal thresholds set. Detail assurance comes from D15/D16 + rings,
+  **never from human review of change content**.
+- **The junior's surface is system-level:** a release card states green/not-green +
+  exceptions; the junior acknowledges system state in seconds, holds/vetoes when
+  something looks off, and otherwise works on the *system* — baselines, exceptions,
+  incidents, gate calibration. A promotion card that requires reading diffs is a
+  design bug.
+- **Non-green never auto-promotes**; exceptions route to the junior (and Terra per
+  tier law).
+- **Open sub-question (mechanism):** one-tap-approve-on-green vs
+  promote-on-green-with-veto-window. Recommendation pending Terra: start R1 with
+  one-tap-on-green (trust-building weeks), graduate per app to
+  promote-on-green-with-veto-window once the policy-evidence register shows clean
+  history — autonomy earned per the ITIL standard-change mechanism, decided by
+  humans.
+- Resolves the promotion-rate bottleneck risk (2026-08-03 risk assessment #3)
+  structurally: junior attention scales with *exceptions*, not with autonomous
+  throughput.
+
+## D16 — Typed composite attestations carry completeness contracts  (Terra, 2026-08-03 — extends D12)
+
+**Terra's ruling:** attestation completeness is verified **only for certain
+attestations — defined by the components of the system**: a PR attestation, a feature
+attestation, a release attestation, etc.
+
+**Design:**
+- **Attestations are typed**, and component-level types (PR, feature, release,
+  deploy — the system's components define the set) each carry a **completeness
+  contract**: the child attestation kinds they MUST contain, via compositional refs
+  (attestation `evidence_refs` may reference other attestations). Examples (v1
+  proposals): PR ⊇ {test-run, diff, review-verdict}; release ⊇ {feature…, canary,
+  rollback-plan}.
+- Contract checking is **deterministic schema validation over the composition tree**
+  — cheap, no model calls. A missing required child ⇒ **INCOMPLETE** (a distinct
+  verdict from UNSUPPORTED: "true but not enough" vs "claimed without evidence").
+- **Leaf attestations are checked for truth (D12), not completeness** — the
+  completeness burden sits only at component boundaries, so the schema doesn't
+  incentivize claim-minimalism at the leaves.
+- Contracts are **versioned policy-as-events**; they start minimal and evolve via the
+  feedback loop (a missed-risk incident adds a required kind — eventual consistency
+  applied to the contracts themselves).
+
+## D15 — Review independence: agents may review agent work; never their own; cross-lineage preferred  (Terra, 2026-08-03)
+
+**Terra's ruling:** it's okay for agents to review agent work, but an agent must not
+review **its own** work — and ideally work is reviewed by an agent running a model
+from a **different lineage** (e.g. GLM reviews Kimi).
+
+**Design:**
+- **Review ≠ approval.** Approvals (authorization: prod promotion, irreversibles)
+  remain **human-only** — the 2026-07-29 ruling stands untouched. Review is
+  quality/verification work: attestation entailment (GP5.4), test/instrument review,
+  finding refutation, design-delta checking.
+- **Independence ladder:** forbidden — same agent/session reviews its own output;
+  minimum — different instance with fresh context (no shared conversational state);
+  preferred — **different model lineage entirely** (non-Claude reviews Claude work).
+  Rationale: same-model reviewers share failure modes, training biases, and
+  compromise surface — the SoD independence finding applied to models, and the fix
+  for the gate-instrument risk (agents authoring the tests that gate them: the
+  instrument reviewer comes from another lineage).
+- **Verdict events record the reviewer principal + model lineage** (the envelope's
+  `producer_principal.runtime` already carries this).
+- **Carve-out from D10:** cross-lineage reviewers are the first sanctioned non-Claude
+  usage — verifier/reviewer calls via external APIs, with their own rails and cost
+  attribution. Implementation stays Claude (D10).
+- **Open:** which lineages to onboard for review (GLM/Kimi/GPT/other), how many
+  verdicts per gate, and the cost envelope. "Ideally" = preferred-not-required in R1:
+  fresh-context Claude review is the floor where external lineages aren't wired yet.
+
 ## D14 — The human engagement model: autonomous inner loop, humans at meaning boundaries  (Terra, 2026-08-01 — completes D13)
 
 **Terra's ruling:** development, research, QA, optimization, and user testing are

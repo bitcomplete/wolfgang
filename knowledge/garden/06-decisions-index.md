@@ -32,6 +32,9 @@ per D11), **SUPERSEDED**.
 | D12 | Attestations v1: atomic claims validated against a runner-captured evidence ledger; no-evidence-ref ⇒ UNSUPPORTED | 2026-07-29 | ACTIVE |
 | D13 | Mostly autopilot: autonomy by environment (rings), prod promotion human-gated, app modes standardize/build/run | 2026-08-01 | ACTIVE |
 | D14 | Autonomous inner loop (dev/research/QA/optimization/user-testing); humans at meaning boundaries (design review, demos, client surfaces, pair drop-in) | 2026-08-01 | ACTIVE |
+| D15 | Agents may review agent work, never their own; different model lineage preferred; review ≠ approval (approvals stay human-only) | 2026-08-03 | ACTIVE |
+| D16 | Typed component attestations (PR/feature/release/deploy) carry completeness contracts; missing child ⇒ INCOMPLETE; leaves truth-checked only | 2026-08-03 | ACTIVE |
+| D17 | Release engineering owns prod promotion (green-by-construction); the junior supervises the system, never the details | 2026-08-03 | ACTIVE |
 
 Also binding: **approval semantics rulings** (2026-07-29, evidence-backed, in
 `r1-spec-inputs.md` §F): human-only approvers; maker-checker aggregate; tier law =

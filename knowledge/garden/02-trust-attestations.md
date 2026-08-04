@@ -32,7 +32,17 @@ Concern: agents hallucinate results ("tests pass", "file deployed"). Answer — 
    only by default; UNSUPPORTED results cannot be approved without a logged,
    reason-coded override. Ring gates require CONFIRMED attestations
    ([[01-autonomy-model]]).
-5. **Verifier fallibility → the learning loop, not more verifiers:** sampled audits
+5. **Typed component attestations carry completeness contracts (D16, 2026-08-03):**
+   PR/feature/release/deploy attestations must contain required child attestation
+   kinds (compositional refs — attestations may reference attestations); missing
+   child ⇒ INCOMPLETE (deterministic, distinct from UNSUPPORTED). Leaves are
+   truth-checked only. Contracts are versioned policy, evolved by the feedback loop.
+6. **Review independence (D15, 2026-08-03):** agents may review agent work; an agent
+   never reviews its own; minimum = fresh-context different instance; preferred =
+   **different model lineage** (non-Claude reviews Claude — the sanctioned non-Claude
+   carve-out from D10). Verdict events record reviewer principal + lineage.
+   **Review ≠ approval** — approvals remain human-only.
+7. **Verifier fallibility → the learning loop, not more verifiers:** sampled audits
    of CONFIRMED verdicts become eval cases ([[04-feedback-learning]]).
 
 ## Per-message policy (D8's idea, v1 body)
