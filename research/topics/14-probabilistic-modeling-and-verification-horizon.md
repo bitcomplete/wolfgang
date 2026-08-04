@@ -5,7 +5,7 @@ tags: [markov, hmm, swarm, cyclic-graphs, category-theory, user-journeys, progre
 sources: [Terra brain dump via Gemini transcript 2026-08-03, D12, D13, D14, spark-to-fire]
 created: 2026-08-03
 updated: 2026-08-03
-status: active — ideation captured and triaged; citation verification in flight (research-round2-transcript-citations.md); nothing here is decided
+status: active — ideation captured and triaged; transcript citations ALL VERIFIED 2026-08-03 (research-round2-transcript-citations.md - ESAA arXiv:2602.23193; draft-mih-agent-bilateral-attestation-01; Spark-to-Fire = City U Macau, 2 authors dual-affiliated Minzu); nothing here is decided
 summary: Extraction from Terra's 2026-08-03 exploration - statistical modeling of agent-swarm state (Markov/HMM framing where attestations are the observation-correction), cyclic communication graphs vs the DAG, partial category-theoretic attestation composition, feature-to-user-dependency risk-aware rollout, and a tiered post-deploy verification model with curated machine-readable user journeys. Triaged R1 / R2 / research-tier.
 ---
 
