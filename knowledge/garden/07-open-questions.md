@@ -36,9 +36,19 @@ summary: The live open queue. A navigator answer touching any of these must say 
 - Scope demotes only at pre-agreed cut lines (mid-point check **2026-08-06**), never
   silently.
 
+## Proposed R1 schema tweaks from the 2026-08-03 ideation (topic 14, pending Terra)
+- UNEXPECTED_FINDING / replan message kind; attestation refs may reference other
+  attestations (compositional drill-down); golden-signal names in rollback criteria;
+  user-journey registry in the App Operations Contract (R1-if-cheap).
+
 ## Watch items
 - Buzz's `buzz-workflow` approval-gate roadmap (overlap grows if it ships ops
   workflows).
 - R2 candidates parked in the reference bank: claims decomposition at scale, triage
   classifier, rewind, multi-harness grafts, multi-user/RBAC, semantic doc-drift +
   cost-anomaly patrol checks, automated tier promotion.
+- R2 candidates from the 2026-08-03 ideation (`research/topics/14-*.md`): swarm-state
+  statistical baselines (Markov/HMM framing — attestation verification is the
+  observation-correction step), dependency-aware segment-scoped prod rollout,
+  standing synthetic-monitoring agents, automated re-planning loops. Research-tier:
+  categorical verification; genealogy governance on cyclic coordination graphs.
